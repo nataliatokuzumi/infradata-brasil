@@ -1,18 +1,15 @@
 from pathlib import Path
 from datetime import datetime
-import hashlib
 import argparse
+import hashlib
+import importlib
+import os
 import sys
 from urllib.parse import urlparse, unquote
-
 import requests
-
-try:
-    from .database import SicroDownloadsDatabase
-    from .settings import database_path
-except ImportError:
-    from database import SicroDownloadsDatabase
-    from settings import database_path
+from database import SicroDownloadsDatabase
+from settings import database_path
+from azure.storage.blob import BlobServiceClient
 
 
 class SicroClient(SicroDownloadsDatabase):
@@ -22,6 +19,10 @@ class SicroClient(SicroDownloadsDatabase):
         super().__init__(db_path=db_file)
         self.download_dir = Path(download_dir)
         self.download_dir.mkdir(parents=True, exist_ok=True)
+        self.connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+        self.container_name = os.getenv("AZURE_STORAGE_CONTAINER")
+        self.service_client = BlobServiceClient.from_connection_string(self.connection_string)
+        self.container_client = self.service_client.get_container_client(self.container_name)
         print(f"Download directory set to: {self.download_dir}")
         print(f"Using database: {self.db_path}")
 
@@ -41,18 +42,34 @@ class SicroClient(SicroDownloadsDatabase):
         parsed = urlparse(url)
         return Path(unquote(parsed.path)).name
 
-    def _upload_to_blob_storage(self, file_path: Path, blob_name: str) -> bool:
-        """
-        Upload a downloaded file to blob storage.
+    def _build_blob_name(self, region: str | None, state_code: str | None, year: str | None, month: str | None, filename: str) -> str:
+        parts = []
 
-        Required information from you:
-        - provider (Azure Blob, AWS S3, Google Cloud Storage, etc.)
-        - credentials or connection string / auth method
-        - container or bucket name
-        - optional prefix/key pattern
-        """
+        if region:
+            parts.append(str(region).strip().lower())
+        if state_code:
+            parts.append(str(state_code).strip().upper())
+        if year:
+            parts.append(str(year))
+        if month:
+            parts.append(str(month).zfill(2))
+
+        hierarchy = "/".join(parts) if parts else "root"
+        return f"{hierarchy}/{filename}".strip("/")
+
+
+    def _upload_to_blob_storage(self, file_path: Path, blob_name: str) -> bool:
+        """Upload a downloaded file to blob storage."""
         print(f"[blob] upload requested: {file_path} -> {blob_name}")
-        return True
+
+        try:
+            with file_path.open("rb") as handle:
+                self.container_client.upload_blob(name=blob_name, data=handle, overwrite=True)
+            print(f"[blob] uploaded successfully: {blob_name}")
+            return True
+        except Exception as exc:
+            print(f"[blob] upload failed: {exc}")
+            return False
 
     def get_file_hash(self, file_path: str) -> str:
         sha256_hash = hashlib.sha256()
@@ -63,15 +80,15 @@ class SicroClient(SicroDownloadsDatabase):
 
     def process_pending_downloads(self, statuses=("pending", "failed"), blob_prefix: str = "") -> None:
         pending_rows = self.get_pending_downloads(statuses)
+        print(f"Found {len(pending_rows)} pending downloads in the database.")
         if not pending_rows:
-            print("No pending downloads found in the database.")
             return
 
         for row in pending_rows:
             _, region, state_code, year, month, revisado, url, filename, extension, status = row
             filename = self._resolve_filename(url, filename)
             downloaded_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            blob_name = f"{blob_prefix}{filename}" if blob_prefix else filename
+            blob_name = self._build_blob_name(region, state_code, year, month, filename)
 
             try:
                 file_path = self._download(url, filename)
