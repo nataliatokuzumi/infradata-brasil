@@ -2,119 +2,151 @@ from pathlib import Path
 from datetime import datetime
 import argparse
 import hashlib
-import importlib
 import os
+import shutil
+import subprocess
 import sys
+import zipfile
 from urllib.parse import urlparse, unquote
+
 import requests
-from database import SicroDownloadsDatabase
-from settings import database_path
 from azure.storage.blob import BlobServiceClient
+
+from database import SicroDownloadsDatabase
+from settings import database_path, download_dir, extract_dir
 
 
 class SicroClient(SicroDownloadsDatabase):
 
-    def __init__(self, download_dir="downloads", db_path=None):
-        db_file = db_path or database_path
-        super().__init__(db_path=db_file)
+    def __init__(self):
+        super().__init__(db_path=database_path)
+
         self.download_dir = Path(download_dir)
         self.download_dir.mkdir(parents=True, exist_ok=True)
+        self.extract_dir = Path(extract_dir)
+        self.extract_dir.mkdir(parents=True, exist_ok=True) 
+
         self.connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
         self.container_name = os.getenv("AZURE_STORAGE_CONTAINER")
         self.service_client = BlobServiceClient.from_connection_string(self.connection_string)
         self.container_client = self.service_client.get_container_client(self.container_name)
-        print(f"Download directory set to: {self.download_dir}")
-        print(f"Using database: {self.db_path}")
 
-    def _download(self, url: str, filename: str) -> Path:
+
+    def _download_to_local_file(self, url: str, filename: str) -> Path:
         destination = self.download_dir / filename
-        response = requests.get(url, timeout=120)
-        response.raise_for_status()
+        print(f"[local] downloading: {url} -> {destination}")
 
-        with open(destination, "wb") as f:
-            f.write(response.content)
+        with requests.get(url, timeout=120, stream=True) as response:
+            response.raise_for_status()
+            with destination.open("wb") as handle:
+                for chunk in response.iter_content(chunk_size=1024 * 1024):
+                    if chunk:
+                        handle.write(chunk)
 
+        print(f"[local] saved: {destination}")
         return destination
 
-    def _resolve_filename(self, url: str, filename: str | None = None) -> str:
-        if filename:
-            return filename
-        parsed = urlparse(url)
-        return Path(unquote(parsed.path)).name
+    def _extract_archive(self, archive_path: Path, extract_dir: Path, extension: str) -> list[Path]:
+        
+        if extension == ".zip":
+            with zipfile.ZipFile(archive_path) as archive:
+                archive.extractall(extract_dir)
+        elif extension == ".rar":
+            try:
+                import rarfile
+            except ImportError:
+                if shutil.which("unrar") is None:
+                    raise RuntimeError("rarfile não está instalado e 'unrar' não está disponível")
+                subprocess.run(["unrar", "x", str(archive_path), str(extract_dir)], check=True, capture_output=True, text=True)
+            else:
+                with rarfile.RarFile(archive_path) as archive:
+                    archive.extractall(extract_dir)
+        elif extension == ".7z":
+            if shutil.which("7z") is None:
+                raise RuntimeError("'7z' não está disponível no PATH")
+            subprocess.run(["7z", "x", str(archive_path), f"-o{extract_dir}"], check=True, capture_output=True, text=True)
+        else:
+            return [archive_path]
 
-    def _build_blob_name(self, region: str | None, state_code: str | None, year: str | None, month: str | None, filename: str) -> str:
-        parts = []
+        return sorted(path for path in extract_dir.rglob("*") if path.is_file())
 
-        if region:
-            parts.append(str(region).strip().lower())
-        if state_code:
-            parts.append(str(state_code).strip().upper())
-        if year:
-            parts.append(str(year))
-        if month:
-            parts.append(str(month).zfill(2))
+    def _upload_local_files_to_blob(self, local_files: list[Path], base_dir: Path, blob_prefix: str) -> list[str]:
+        uploaded_blob_names = []
 
-        hierarchy = "/".join(parts) if parts else "root"
-        return f"{hierarchy}/{filename}".strip("/")
+        for local_file in local_files:
+            relative_path = local_file.relative_to(base_dir).as_posix()
+            blob_name = f"{blob_prefix.rstrip('/')}/{relative_path}" if blob_prefix else relative_path
+            print(f"[blob] uploading: {local_file} -> {blob_name}")
 
+            with local_file.open("rb") as handle:
+                self.container_client.upload_blob(name=blob_name, data=handle, overwrite=True)
 
-    def _upload_to_blob_storage(self, file_path: Path, blob_name: str) -> bool:
-        """Upload a downloaded file to blob storage."""
-        print(f"[blob] upload requested: {file_path} -> {blob_name}")
+            uploaded_blob_names.append(blob_name)
+
+        return uploaded_blob_names
+
+    def _download_extract_and_upload(self, url: str, region: str, state_code: str, year: str, month: str, filename: str, extension: str) -> str | None:
+
+        downloaded_path = self._download_to_local_file(url, filename)
 
         try:
-            with file_path.open("rb") as handle:
-                self.container_client.upload_blob(name=blob_name, data=handle, overwrite=True)
-            print(f"[blob] uploaded successfully: {blob_name}")
-            return True
+            extracted_files = self._extract_archive(downloaded_path, extract_dir, extension)
         except Exception as exc:
-            print(f"[blob] upload failed: {exc}")
-            return False
+            print(f"[local] extraction failed: {exc}")
+            extracted_files = [downloaded_path]
 
-    def get_file_hash(self, file_path: str) -> str:
+        if extracted_files == [downloaded_path]:
+            base_dir = downloaded_path.parent
+            files_to_upload = [downloaded_path]
+        else:
+            base_dir = extract_dir
+            files_to_upload = [path for path in extracted_files if path.is_file()]
+
+        blob_prefix = self._build_blob_name(region, state_code, year, month, archive_name)
+        self._upload_local_files_to_blob(files_to_upload, base_dir, blob_prefix)
+
+        return self._calculate_hash(downloaded_path)
+
+    def _calculate_hash(self, file_path: Path) -> str:
         sha256_hash = hashlib.sha256()
-        with open(file_path, "rb") as f:
-            for byte_block in iter(lambda: f.read(4096), b""):
+        with file_path.open("rb") as handle:
+            for byte_block in iter(lambda: handle.read(4096), b""):
                 sha256_hash.update(byte_block)
         return sha256_hash.hexdigest()
 
-    def process_pending_downloads(self, statuses=("pending", "failed"), blob_prefix: str = "") -> None:
-        pending_rows = self.get_pending_downloads(statuses)
+    def process_pending_downloads(self, statuses=("pending", "failed"), nfiles: int = None) -> None:
+        pending_rows = self.get_pending_downloads(statuses, nfiles)
         print(f"Found {len(pending_rows)} pending downloads in the database.")
+
         if not pending_rows:
             return
 
         for row in pending_rows:
             _, region, state_code, year, month, revisado, url, filename, extension, status = row
-            filename = self._resolve_filename(url, filename)
             downloaded_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            blob_name = self._build_blob_name(region, state_code, year, month, filename)
 
             try:
-                file_path = self._download(url, filename)
-                file_hash = self.get_file_hash(file_path)
-                upload_ok = self._upload_to_blob_storage(file_path, blob_name)
-                if upload_ok:
+                file_hash = self._download_extract_and_upload(url, region, state_code, year, month, filename)
+                if file_hash:
                     self.update_download_by_url(url, status="downloaded", file_hash=file_hash, downloaded_at=downloaded_at)
-                    print(f"Downloaded and uploaded: {url} -> {blob_name}")
+                    print(f"Downloaded, extracted and uploaded: {url}")
                 else:
                     self.update_download_by_url(url, status="failed", downloaded_at=downloaded_at)
                     print(f"Upload failed for {url}")
             except requests.RequestException as exc:
                 self.update_download_by_url(url, status="failed", downloaded_at=downloaded_at)
                 print(f"Failed to download {url}: {exc}")
+            except Exception as exc:
+                self.update_download_by_url(url, status="failed", downloaded_at=downloaded_at)
+                print(f"Processing failed for {url}: {exc}")
 
-    @staticmethod
-    def main(argv=None) -> None:
-        parser = argparse.ArgumentParser(description="Download pending Sicro file URLs from the database and upload them to blob storage.")
-        parser.add_argument("--db", default=None, help="Path to the SQLite database file")
-        parser.add_argument("--download-dir", default="downloads", help="Local directory for downloaded files")
-        parser.add_argument("--blob-prefix", default="", help="Optional prefix for blob storage keys")
-        args = parser.parse_args(argv)
 
-        client = SicroClient(download_dir=args.download_dir, db_path=args.db)
-        client.process_pending_downloads(blob_prefix=args.blob_prefix)
+    def main(self) -> None:
+
+        self.process_pending_downloads()
 
 
 if __name__ == "__main__":
-    SicroClient.main(sys.argv[1:])
+    client = SicroClient()
+    client.main()
+

@@ -1,6 +1,9 @@
 from datetime import datetime
 
-database_path = "/Users/nataliaeruan/Documents/Nat/projetos/infradata_brasil/connectors/sicro/downloads.db"
+database_path = "downloads.db"
+
+download_dir = "downloads"
+extract_dir = "extracted"
 
 sicro_base_url = r"https://www.gov.br/dnit/pt-br/assuntos/planejamento-e-pesquisa/custos-referenciais/sistemas-de-custos/sicro/relatorios/relatorios-sicro"
 

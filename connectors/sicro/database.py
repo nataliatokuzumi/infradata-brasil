@@ -1,12 +1,14 @@
 import sqlite3
-
+from pathlib import Path
 
 
 class SicroDownloadsDatabase:
 
     def __init__(self, db_path: str):
-        self.db_path = db_path
-        self.conn = sqlite3.connect(self.db_path)
+        
+        self.db = Path(__file__).parent / db_path
+        print(self.db.exists())
+        self.conn = sqlite3.connect(self.db)
         self.create_table()
 
     def create_table(self):
@@ -67,13 +69,14 @@ class SicroDownloadsDatabase:
         )
         return cursor.fetchone() is not None
 
-    def get_pending_downloads(self, statuses=("pending",)):
+    def get_pending_downloads(self, statuses=("pending",), nfiles: int = None):
         placeholders = ",".join("?" for _ in statuses)
         query = f"""
             SELECT id, region, state_code, year, month, revisado, url, filename, extension, status
             FROM sicro_downloads
             WHERE status IN ({placeholders})
-            ORDER BY scraped_at ASC, id ASC;
+            ORDER BY scraped_at ASC, id ASC
+            {f"LIMIT {nfiles}" if nfiles is not None else ""};
             """
         cursor = self.conn.cursor()
         cursor.execute(query, statuses)
