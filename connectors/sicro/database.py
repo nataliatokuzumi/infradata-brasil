@@ -46,7 +46,7 @@ class SicroDownloadsDatabase:
         scraped_at: str = None,
         downloaded_at: str = None,
         status: str = None,
-        file_hash: str = None,
+        file_hash: str = None
     ):
         with self.conn:
             self.conn.execute(
@@ -54,7 +54,7 @@ class SicroDownloadsDatabase:
                 INSERT OR IGNORE INTO sicro_downloads (
                     region, state_code, year, month, revisado, url, filename, extension, scraped_at, downloaded_at, status, file_hash
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
                 """,
                 (region, state_code, year, month, revisado, url, filename, extension, scraped_at, downloaded_at, status, file_hash),
             )
@@ -72,9 +72,10 @@ class SicroDownloadsDatabase:
     def get_pending_downloads(self, statuses=("pending",), nfiles: int = None):
         placeholders = ",".join("?" for _ in statuses)
         query = f"""
-            SELECT id, region, state_code, year, month, revisado, url, filename, extension, status
+            SELECT id, region, state_code, year, month, url, filename, extension
             FROM sicro_downloads
             WHERE status IN ({placeholders})
+            and region in ('norte')
             ORDER BY scraped_at ASC, id ASC
             {f"LIMIT {nfiles}" if nfiles is not None else ""};
             """
@@ -84,19 +85,28 @@ class SicroDownloadsDatabase:
 
     def update_download_by_url(
         self,
-        url: str,
-        status: str,
-        file_hash: str = None,
-        downloaded_at: str = None,
-    ):
+        downloads: list[dict]
+    ) -> None:
+        
+        if not downloads:   
+            return
+        
+        rows = [(
+            item.get("status"),
+            item.get("file_hash"),
+            item.get("downloaded_at"),
+            item["url"]
+        ) for item in downloads
+        ]
+
         with self.conn:
-            self.conn.execute(
+            self.conn.executemany(
                 """
                 UPDATE sicro_downloads
                 SET status = ?, file_hash = ?, downloaded_at = COALESCE(?, downloaded_at)
                 WHERE url = ?;
                 """,
-                (status, file_hash, downloaded_at, url),
+                rows,
             )
 
     def update_download(
@@ -132,5 +142,17 @@ class SicroDownloadsDatabase:
             (state_code, year, month, revisado),
         )
         return cursor.fetchone()
+    
+    def get_blob_url(self):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            SELECT blob_url
+            FROM sicro_downloads
+            WHERE blob_url IS NOT NULL;
+            """
+        )
+        result = cursor.fetchone()
+        return result[0] if result else None
 
  
