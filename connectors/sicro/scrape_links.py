@@ -6,8 +6,8 @@ from urllib.parse import urljoin, urlparse
 
 import requests
 
-from database import SicroDownloadsDatabase
-from settings import sicro_base_url, database_path, sicro_regions
+from connectors.sicro.database import SicroDownloadsDatabase
+from connectors.sicro.settings import sicro_base_url, database_path, sicro_regions
 
 
 class LinkParser(HTMLParser):

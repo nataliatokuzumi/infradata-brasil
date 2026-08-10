@@ -1,4 +1,5 @@
 from connectors.sicro.client import SicroClient
 
 if __name__ == "__main__":
-    SicroClient.main()
+    client = SicroClient()
+    client.main()

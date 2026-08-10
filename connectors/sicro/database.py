@@ -7,7 +7,6 @@ class SicroDownloadsDatabase:
     def __init__(self, db_path: str):
         
         self.db = Path(__file__).parent / db_path
-        print(self.db.exists())
         self.conn = sqlite3.connect(self.db)
         self.create_table()
 
@@ -142,17 +141,3 @@ class SicroDownloadsDatabase:
             (state_code, year, month, revisado),
         )
         return cursor.fetchone()
-    
-    def get_blob_url(self):
-        cursor = self.conn.cursor()
-        cursor.execute(
-            """
-            SELECT blob_url
-            FROM sicro_downloads
-            WHERE blob_url IS NOT NULL;
-            """
-        )
-        result = cursor.fetchone()
-        return result[0] if result else None
-
- 
