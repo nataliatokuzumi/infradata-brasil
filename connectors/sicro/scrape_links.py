@@ -6,8 +6,9 @@ from urllib.parse import urljoin, urlparse
 
 import requests
 
+from connectors.common.db_sync import persist_tracking_db, restore_tracking_db
 from connectors.sicro.database import SicroDownloadsDatabase
-from connectors.sicro.settings import sicro_base_url, database_path, sicro_regions
+from connectors.sicro.settings import sicro_base_url, database_local_path, sicro_regions
 
 
 class LinkParser(HTMLParser):
@@ -130,23 +131,29 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Extrair links de uma página e salvar em um banco SQLite")
     parser.add_argument("--region", help="Região a ser analisada (ex: sudeste)", choices=sicro_regions)
-    parser.add_argument("--db", default=database_path, help="Caminho para o banco de dados")
+    parser.add_argument("--db", default=str(database_local_path), help="Caminho para o banco de dados")
     parser.add_argument("--max-depth", type=int, default=5, help="Profundidade máxima de navegação (padrão: 5)")
     args = parser.parse_args()
 
-    database = SicroDownloadsDatabase(db_path=str(Path(args.db).resolve()))
+    local_db_path = Path(args.db).resolve()
 
-    regions = [args.region] if args.region else sicro_regions
+    restore_tracking_db(local_db_path)
+    database = SicroDownloadsDatabase(db_path=str(local_db_path))
 
-    for region in regions:
-        if region == 'nordeste':
-            base_url = f"{sicro_base_url}/{region}"
-            links = scrape_links(base_url, database, max_depth=args.max_depth)
+    try:
+        regions = [args.region] if args.region else sicro_regions
 
-            print(f"Links encontrados em {base_url}:")
-            for link in links:
-                print(link)
-            print(f"\nURLs salvas em {Path(args.db).resolve()}")
+        for region in regions:
+            if region == 'nordeste':
+                base_url = f"{sicro_base_url}/{region}"
+                links = scrape_links(base_url, database, max_depth=args.max_depth)
+
+                print(f"Links encontrados em {base_url}:")
+                for link in links:
+                    print(link)
+                print(f"\nURLs salvas em {local_db_path}")
+    finally:
+        persist_tracking_db(local_db_path)
 
 
 if __name__ == "__main__":

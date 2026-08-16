@@ -6,10 +6,11 @@ import shutil
 from ftfy import fix_text
 
 from connectors.blob_storage.client import BlobStorageClient
-from connectors.common.archive import extract_archive
+from connectors.common.extract import extract_archive
+from connectors.common.db_sync import persist_tracking_db, restore_tracking_db
 from connectors.common.http import download_to_file
 from connectors.sicro.database import SicroDownloadsDatabase
-from connectors.sicro.settings import database_path, download_dir, extract_dir
+from connectors.sicro.settings import database_path, database_local_path, download_dir, extract_dir
 
 
 def build_blob_name(
@@ -180,5 +181,9 @@ class SicroClient(SicroDownloadsDatabase):
 
 
 if __name__ == "__main__":
-    client = SicroClient()
-    client.main()
+    restore_tracking_db(database_local_path)
+    try:
+        client = SicroClient()
+        client.main()
+    finally:
+        persist_tracking_db(database_local_path)

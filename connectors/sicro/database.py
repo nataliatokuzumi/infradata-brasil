@@ -53,7 +53,7 @@ class SicroDownloadsDatabase:
                 INSERT OR IGNORE INTO sicro_downloads (
                     region, state_code, year, month, revisado, url, filename, extension, scraped_at, downloaded_at, status, file_hash
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
                 """,
                 (region, state_code, year, month, revisado, url, filename, extension, scraped_at, downloaded_at, status, file_hash),
             )
@@ -141,3 +141,101 @@ class SicroDownloadsDatabase:
             (state_code, year, month, revisado),
         )
         return cursor.fetchone()
+
+
+class SicroParsedFilesDatabase:
+    """Tracks which raw Relatório Sintético xlsx blobs have been parsed into
+    silver Parquet. Lives in the same db file as SicroDownloadsDatabase
+    (round-tripped through Blob Storage as a single file per CI run)."""
+
+    def __init__(self, db_path: str):
+
+        self.db = Path(__file__).parent / db_path
+        self.conn = sqlite3.connect(self.db)
+        self.create_table()
+
+    def create_table(self):
+        with self.conn:
+            self.conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS sicro_parsed_files (
+                    id INTEGER PRIMARY KEY,
+                    blob_name TEXT NOT NULL UNIQUE,
+                    report_type TEXT NULL,
+                    region TEXT NULL,
+                    state_slug TEXT NULL,
+                    year TEXT NULL,
+                    month TEXT NULL,
+                    desonerado BOOLEAN NULL,
+                    revisado BOOLEAN NULL,
+                    archive_stem TEXT NULL,
+                    silver_blob_name TEXT NULL,
+                    row_count INTEGER NULL,
+                    status TEXT NULL,
+                    error TEXT NULL,
+                    parsed_at TIMESTAMP NULL
+                );
+                """
+            )
+
+    def is_parsed(self, blob_name: str) -> bool:
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            SELECT 1 FROM sicro_parsed_files WHERE blob_name = ? AND status = 'parsed' LIMIT 1;
+            """,
+            (blob_name,),
+        )
+        return cursor.fetchone() is not None
+
+    def upsert_parsed_file(self, record: dict) -> None:
+        with self.conn:
+            self.conn.execute(
+                """
+                INSERT INTO sicro_parsed_files (
+                    blob_name, report_type, region, state_slug, year, month,
+                    desonerado, revisado, archive_stem, silver_blob_name,
+                    row_count, status, error, parsed_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(blob_name) DO UPDATE SET
+                    report_type = excluded.report_type,
+                    region = excluded.region,
+                    state_slug = excluded.state_slug,
+                    year = excluded.year,
+                    month = excluded.month,
+                    desonerado = excluded.desonerado,
+                    revisado = excluded.revisado,
+                    archive_stem = excluded.archive_stem,
+                    silver_blob_name = excluded.silver_blob_name,
+                    row_count = excluded.row_count,
+                    status = excluded.status,
+                    error = excluded.error,
+                    parsed_at = excluded.parsed_at;
+                """,
+                (
+                    record["blob_name"],
+                    record.get("report_type"),
+                    record.get("region"),
+                    record.get("state_slug"),
+                    record.get("year"),
+                    record.get("month"),
+                    record.get("desonerado"),
+                    record.get("revisado"),
+                    record.get("archive_stem"),
+                    record.get("silver_blob_name"),
+                    record.get("row_count"),
+                    record.get("status"),
+                    record.get("error"),
+                    record.get("parsed_at"),
+                ),
+            )
+
+    def get_failed(self) -> list[tuple]:
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            SELECT blob_name, error FROM sicro_parsed_files WHERE status = 'failed';
+            """
+        )
+        return cursor.fetchall()

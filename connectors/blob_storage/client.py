@@ -11,7 +11,7 @@ class BlobStorageClient:
 
     Connectors own the blob naming/partitioning convention for their data
     (e.g. SICRO's region/state/year/month layout); this client only knows how
-    to upload bytes to a given blob name.
+    to upload/list/download bytes for a given blob name.
     """
 
     def __init__(self, connection_string: str | None = None, container_name: str | None = None):
@@ -51,3 +51,23 @@ class BlobStorageClient:
                 future.result()
                 for future in futures
             ]
+
+    def list_blobs(self, name_starts_with: str | None = None) -> list[str]:
+        return [
+            blob.name
+            for blob in self.container_client.list_blobs(name_starts_with=name_starts_with)
+        ]
+
+    def blob_exists(self, blob_name: str) -> bool:
+        return self.container_client.get_blob_client(blob_name).exists()
+
+    def download_blob_bytes(self, blob_name: str) -> bytes:
+        return self.container_client.download_blob(blob_name).readall()
+
+    def download_blob_to_file(self, blob_name: str, destination: Path) -> Path:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+
+        with destination.open("wb") as handle:
+            self.container_client.download_blob(blob_name).readinto(handle)
+
+        return destination

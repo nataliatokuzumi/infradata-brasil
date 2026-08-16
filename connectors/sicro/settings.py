@@ -1,6 +1,10 @@
 from datetime import datetime
+from pathlib import Path
 
 database_path = "downloads.db"
+# Canonical absolute location of the tracking db, independent of CWD — every
+# entry point (scrape_links, client, parse) must sync/open the same file.
+database_local_path = Path(__file__).parent / database_path
 
 download_dir = "downloads"
 extract_dir = "extracted"
