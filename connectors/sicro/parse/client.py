@@ -57,7 +57,7 @@ class SicroParseClient:
 
         try:
             xlsx_bytes = self.blob_client.download_blob_bytes(c.blob_name)
-            df = parse_relatorio_sintetico(xlsx_bytes)
+            df = parse_relatorio_sintetico(xlsx_bytes, c.report_type)
 
             local_path = write_silver_parquet(df, c, self.parsed_dir)
             silver_blob_name = build_silver_blob_name(c)
@@ -84,12 +84,16 @@ class SicroParseClient:
                 "error": str(exc),
             }
 
-    def process_pending(self, max_workers: int = 5) -> None:
+    def process_pending(self, max_workers: int = 5, limit: int | None = None) -> None:
         candidates = self.pending_candidates()
 
         print(
             f"Found {len(candidates)} pending report files to parse."
         )
+
+        if limit is not None:
+            candidates = candidates[:limit]
+            print(f"Limiting this run to {len(candidates)} file(s).")
 
         if not candidates:
             return
@@ -104,5 +108,5 @@ class SicroParseClient:
             for future in as_completed(futures):
                 self.tracking_db.upsert_parsed_file(future.result())
 
-    def main(self) -> None:
-        self.process_pending()
+    def main(self, limit: int | None = None) -> None:
+        self.process_pending(limit=limit)
