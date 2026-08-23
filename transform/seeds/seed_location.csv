@@ -1,0 +1,28 @@
+state_slug,state_code,state_name,region
+espirito-santo,es,Espírito Santo,sudeste
+minas-gerais,mg,Minas Gerais,sudeste
+rio-de-janeiro,rj,Rio de Janeiro,sudeste
+sao-paulo,sp,São Paulo,sudeste
+acre,ac,Acre,norte
+amapa,ap,Amapá,norte
+amazonas,am,Amazonas,norte
+para,pa,Pará,norte
+rondonia,ro,Rondônia,norte
+roraima,rr,Roraima,norte
+tocantins,to,Tocantins,norte
+alagoas,al,Alagoas,nordeste
+bahia,ba,Bahia,nordeste
+ceara,ce,Ceará,nordeste
+maranhao,ma,Maranhão,nordeste
+paraiba,pb,Paraíba,nordeste
+pernambuco,pe,Pernambuco,nordeste
+piaui,pi,Piauí,nordeste
+rio-grande-do-norte,rn,Rio Grande do Norte,nordeste
+sergipe,se,Sergipe,nordeste
+distrito-federal,df,Distrito Federal,centro-oeste
+goias,go,Goiás,centro-oeste
+mato-grosso,mt,Mato Grosso,centro-oeste
+mato-grosso-do-sul,ms,Mato Grosso do Sul,centro-oeste
+parana,pr,Paraná,sul
+rio-grande-do-sul,rs,Rio Grande do Sul,sul
+santa-catarina,sc,Santa Catarina,sul

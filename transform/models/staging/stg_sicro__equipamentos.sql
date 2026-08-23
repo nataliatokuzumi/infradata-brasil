@@ -1,0 +1,23 @@
+select
+    codigo,
+    descricao,
+    valor_aquisicao,
+    depreciacao,
+    oportunidade_capital,
+    seguros_impostos,
+    manutencao,
+    operacao,
+    mao_de_obra_operacao,
+    custo_produtivo,
+    custo_improdutivo,
+    report_type,
+    desonerado,
+    revisado,
+    region,
+    state_slug,
+    cast(year as integer) as year,
+    month,
+    archive_stem,
+    blob_name,
+    cast(parsed_at as timestamp) as parsed_at
+from {{ source('sicro_silver', 'equipamentos') }}
