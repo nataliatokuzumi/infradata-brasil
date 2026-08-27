@@ -63,6 +63,35 @@ which breaks a plain `astype(float)`. Fix: map `'-'` to `None` before casting
 fail-loudly convention (a bad file becomes a `status: failed` tracking row
 rather than silently mis-parsing).
 
+## 6. The same `codigo` can appear more than once within a single file, with fully identical values
+
+Confirmed on `centro-oeste/distrito-federal/2021/outubro/df-outubro-2021/DF 10-2021
+Relatório Sintético de Equipamentos - com desoneração.xlsx`: code `A9308`
+("Caminhão plataforma 4 x 2... Motorista de veículo especial") appears 3
+times (Excel rows 497, 504, 515), byte-identical across all 11 columns each
+time — not a parsing bug, the source file itself lists it 3 times.
+
+There's no section-header row anywhere in the sheet to explain this (every
+row's first cell matches the `letra+dígitos` code pattern, confirmed by
+scanning the whole sheet). The only pattern found: from roughly row 361 to
+the end, the sheet is mostly `E9xxx`-coded items that only populate
+`custo_produtivo`/`custo_improdutivo` (columns C:I merged/blank in Excel),
+and `A9308` — which *does* have the full cost breakdown — is interspersed 3
+times in that stretch, each time right after a different `E9xxx` row.
+Likely explanation: this "synthetic" report is assembled from several
+underlying cost compositions, and a shared support vehicle like A9308 gets
+pulled in once per composition that references it, without dedup on the
+DNIT side — but nothing in the file itself confirms this; it's inferred
+from the position pattern, not stated data.
+
+**Decision:** silver stays an untouched mirror of the source file, including
+this duplication — `reader.py`/`writer.py` are not changed for this.
+Deduplication (exact-duplicate rows here, and resolving `revisado` in
+general) belongs in the dbt marts layer (`transform/models/marts/facts/`),
+as an explicit business-logic step over silver — not silently baked into the
+parse pipeline. Implemented in `fato_preco_material`/`fato_custo_equipamento`/
+`fato_custo_mao_de_obra` (see each model's header comment).
+
 ## General pattern
 
 All of the above are handled in `reader.py` by failing loudly on anything

@@ -1,0 +1,33 @@
+version: 2
+
+models:
+  - name: dim_uf
+    description: Dimensão de UF — uma linha por unidade federativa.
+    columns:
+      - name: state_slug
+        data_tests: [not_null, unique]
+
+  - name: dim_data_referencia
+    description: >
+      Dimensão de período — uma linha por (ano, mês) em que algum relatório
+      SICRO foi publicado. SICRO publica trimestralmente (confirmado:
+      janeiro/abril/julho/outubro).
+    columns:
+      - name: period_start
+        data_tests: [not_null, unique]
+
+  - name: dim_insumo
+    description: >
+      Catálogo de itens (materiais/equipamentos/mao_de_obra) — uma linha por
+      (tipo, codigo). unidade é sempre nula para equipamentos (o relatório
+      não publica essa coluna pra esse tipo).
+    columns:
+      - name: insumo_id
+        data_tests: [not_null, unique]
+      - name: tipo
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['materiais', 'equipamentos', 'mao_de_obra']
+      - name: codigo
+        data_tests: [not_null]

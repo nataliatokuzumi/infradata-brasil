@@ -17,6 +17,6 @@ transform/dbt_packages/
 *.log
 
 # not ready to push yet
-tests/
+connectors/**/tests/
 notebooks/
 .claude/
