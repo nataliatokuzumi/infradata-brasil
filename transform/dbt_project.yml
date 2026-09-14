@@ -15,5 +15,6 @@ models:
       +materialized: view
     marts:
       +materialized: table
+      +post-hook: "{{ export_to_gold() }}"
       exposure:
         +materialized: view

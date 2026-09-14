@@ -16,3 +16,6 @@ rarfile==4.4
 requests==2.34.2
 typing_extensions==4.16.0
 urllib3==2.7.0
+dbt-core==1.12.0
+dbt-duckdb==1.11.0
+duckdb==1.5.5
