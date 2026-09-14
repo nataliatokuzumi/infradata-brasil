@@ -20,3 +20,6 @@ transform/dbt_packages/
 connectors/**/tests/
 notebooks/
 .claude/
+
+# dash - .env has the Azure secrets, never commit it
+dash/.env

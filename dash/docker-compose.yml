@@ -1,0 +1,14 @@
+services:
+  dash:
+    build: .
+    restart: unless-stopped
+    environment:
+      AZURE_STORAGE_CONNECTION_STRING: ${AZURE_STORAGE_CONNECTION_STRING}
+      AZURE_STORAGE_CONTAINER: ${AZURE_STORAGE_CONTAINER}
+    ports:
+      - "8501:8501"
+    volumes:
+      - dash-duckdb-home:/app/duckdb_home
+
+volumes:
+  dash-duckdb-home:
