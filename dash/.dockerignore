@@ -1,0 +1,12 @@
+# .env tem a connection string real do Azure — nunca pode entrar numa
+# camada da imagem (mesmo sendo passada por env var no runtime também).
+.env
+.env.example
+
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# nada disso é usado dentro do container
+docker-compose.yml
+.dockerignore

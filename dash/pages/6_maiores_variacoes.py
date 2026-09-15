@@ -5,7 +5,7 @@ import plotly.express as px
 from dash import Input, Output, State, callback, dcc
 
 from components import data_table, filter_row, info_box, page_header
-from gold import TIPO_LABELS, TIPOS, formatar_moeda_grafico, formatar_periodo, list_ufs, query, rotulo_medida, rotulo_regiao
+from gold import MEDIDA_PRINCIPAL, TIPO_LABELS, TIPOS, formatar_moeda_grafico, formatar_periodo, list_ufs, query, rotulo_medida, rotulo_regiao
 
 dash.register_page(
     __name__,
@@ -17,40 +17,57 @@ dash.register_page(
 
 PREFIX = "mv"
 
+# Sem "Ambos" aqui de propósito: diferente de Análise de Insumos, misturar
+# os dois regimes no mesmo ranking fazia cada item aparecer até 2x (mais os
+# vários componentes de custo somados — ver _buscar_maiores_variacoes).
+REGIME_OPCOES = ["Não Desonerado", "Desonerado"]
 
-def _buscar_maiores_variacoes(tipo, uf_escolhida, regiao):
+
+def _buscar_maiores_variacoes(tipo, uf_escolhida, regiao, regime):
     ufs = list_ufs()
 
     if uf_escolhida != "Todos":
         slug_rows = ufs[ufs["state_name"] == uf_escolhida]["state_slug"]
         if slug_rows.empty:
             return pd.DataFrame()
+        slugs = slug_rows
+    else:
+        # UF="Todos": ranqueia junto todas as UFs da região escolhida (ou
+        # do Brasil inteiro, se a região também for "Todas") em vez de UF
+        # por UF.
+        slugs = ufs["state_slug"] if regiao == "Todas" else ufs[ufs["region"] == regiao]["state_slug"]
 
-        return query(
-            """
-            select codigo, descricao, medida, state_name, period_start, valor, valor_anterior, variacao_percentual, posicao
-            from vw_maiores_variacoes
-            where tipo = ? and state_slug = ?
-            order by posicao
-            """,
-            [tipo, slug_rows.iloc[0]],
-        )
-
-    # UF="Todos": vw_maiores_variacoes é ranqueada por UF (top 20 de CADA
-    # uma) — não serve pra um "top 20 geral". Refaz a mesma lógica da view
-    # (último período disponível de cada UF, ranqueado por |variação%|),
-    # só que ranqueando junto todas as UFs da região escolhida (ou do
-    # Brasil inteiro, se a região também for "Todas") em vez de UF por UF.
-    slugs = ufs["state_slug"] if regiao == "Todas" else ufs[ufs["region"] == regiao]["state_slug"]
     if slugs.empty:
         return pd.DataFrame()
 
+    # vw_maiores_variacoes ranqueia por (insumo, UF, regime, MEDIDA) — pra
+    # equipamentos/mão de obra, que têm várias medidas (componentes de
+    # custo) e 2 regimes, isso inundava o Top 20 com o mesmo insumo
+    # repetido várias vezes (confirmado: um único item ocupou 12 das 20
+    # posições num teste). Por isso não usa a view pronta — refaz a mesma
+    # lógica dela (último período disponível de cada UF, ranqueado por
+    # |variação%|) direto em cima de vw_evolucao_preco, já restrita à
+    # medida principal do tipo e a um regime por vez.
+    principal = MEDIDA_PRINCIPAL[tipo]
     placeholders = ",".join(["?"] * len(slugs))
     sql = f"""
         with evolucao as (
             select *
             from vw_evolucao_preco
-            where tipo = ? and variacao_percentual is not null and state_slug in ({placeholders})
+            where tipo = ? and medida = ? and variacao_percentual is not null
+              and state_slug in ({placeholders})
+    """
+    params: list = [tipo, principal, *slugs.tolist()]
+
+    if regime == "Não Desonerado":
+        sql += " and not desonerado"
+    elif regime == "Desonerado":
+        sql += " and desonerado"
+    # materiais não tem variante desonerado — regime vem None (filtro
+    # desabilitado) e nenhuma das duas condições acima entra, o que já é
+    # o comportamento certo (materiais só tem uma linha por UF/período).
+
+    sql += """
         ),
         ultimo_periodo as (
             select state_slug, max(period_start) as ultimo_period_start
@@ -71,7 +88,7 @@ def _buscar_maiores_variacoes(tipo, uf_escolhida, regiao):
         order by posicao
         limit 20
     """
-    return query(sql, [tipo, *slugs.tolist()])
+    return query(sql, params)
 
 
 def layout(**kwargs):
@@ -80,8 +97,9 @@ def layout(**kwargs):
         [
             *page_header(
                 "Maiores Variações Recentes",
-                "Top 20 itens com maior variação de preço no último período disponível da UF "
-                "ou da região — sinal de risco pra linhas de orçamento.",
+                "Top 20 itens com maior variação de preço (medida principal do tipo) no "
+                "último período disponível da UF ou da região — sinal de risco pra linhas "
+                "de orçamento.",
             ),
             filter_row(
                 ("", dmc.Select(
@@ -106,6 +124,16 @@ def layout(**kwargs):
                     + [{"label": n, "value": n} for n in ufs["state_name"]],
                     value="Todos",
                     searchable=True,
+                    allowDeselect=False,
+                )),
+                # Materiais não tem variante desonerado — o filtro continua
+                # visível, só fica desabilitado e sem opções (mesmo padrão
+                # da página Análise de Insumos).
+                ("", dmc.Select(
+                    id=f"{PREFIX}-regime",
+                    label="Regime",
+                    data=[{"label": o, "value": o} for o in REGIME_OPCOES],
+                    value=REGIME_OPCOES[0],
                     allowDeselect=False,
                 )),
                 # filter_row usa align="flex-end", que alinha esse
@@ -162,6 +190,19 @@ def _atualizar_opcoes_uf(regiao, uf_atual):
 
 
 @callback(
+    Output(f"{PREFIX}-regime", "value"),
+    Output(f"{PREFIX}-regime", "data"),
+    Output(f"{PREFIX}-regime", "disabled"),
+    Input(f"{PREFIX}-tipo", "value"),
+    State(f"{PREFIX}-regime", "value"),
+)
+def _alternar_regime(tipo, valor_atual):
+    if tipo == "materiais":
+        return None, [], True
+    return valor_atual or REGIME_OPCOES[0], [{"label": o, "value": o} for o in REGIME_OPCOES], False
+
+
+@callback(
     Output(f"{PREFIX}-tipo", "value"),
     Output(f"{PREFIX}-regiao", "value"),
     Output(f"{PREFIX}-uf", "value", allow_duplicate=True),
@@ -177,12 +218,13 @@ def _limpar_filtros(n_clicks):
     Input(f"{PREFIX}-tipo", "value"),
     Input(f"{PREFIX}-uf", "value"),
     Input(f"{PREFIX}-regiao", "value"),
+    Input(f"{PREFIX}-regime", "value"),
 )
-def _renderizar_grafico(tipo, uf_escolhida, regiao):
+def _renderizar_grafico(tipo, uf_escolhida, regiao, regime):
     if not uf_escolhida:
         return info_box("Sem dados pra essa combinação.")
 
-    df = _buscar_maiores_variacoes(tipo, uf_escolhida, regiao)
+    df = _buscar_maiores_variacoes(tipo, uf_escolhida, regiao, regime)
 
     if df.empty:
         return info_box("Sem dados pra essa combinação.")
@@ -203,6 +245,13 @@ def _renderizar_grafico(tipo, uf_escolhida, regiao):
         orientation="h",
         color="variação%",
         color_continuous_scale="RdYlGn",
+        # sem isso, a escala de cor ancora no mínimo/máximo do que está
+        # sendo exibido — se o Top 20 filtrado vier todo positivo (só
+        # aumentos), o aumento MENOR (mas ainda positivo) virava vermelho
+        # só por ser "o menor da lista". Fixar o centro em 0 garante que
+        # vermelho/verde sempre reflitam queda/alta de verdade, não a
+        # faixa local do filtro atual.
+        color_continuous_midpoint=0,
         text="variação%_rótulo",
     )
     fig.update_traces(hovertemplate="%{y}<br>%{text}<extra></extra>")
@@ -241,12 +290,13 @@ def _renderizar_grafico(tipo, uf_escolhida, regiao):
     Input(f"{PREFIX}-tipo", "value"),
     Input(f"{PREFIX}-uf", "value"),
     Input(f"{PREFIX}-regiao", "value"),
+    Input(f"{PREFIX}-regime", "value"),
 )
-def _renderizar_tabela(tipo, uf_escolhida, regiao):
+def _renderizar_tabela(tipo, uf_escolhida, regiao, regime):
     if not uf_escolhida:
         return info_box("Sem dados pra essa combinação.")
 
-    df = _buscar_maiores_variacoes(tipo, uf_escolhida, regiao)
+    df = _buscar_maiores_variacoes(tipo, uf_escolhida, regiao, regime)
 
     if df.empty:
         return info_box("Sem dados pra essa combinação.")

@@ -9,6 +9,20 @@ duplicar lógica."""
 import dash_mantine_components as dmc
 from dash import dash_table, html
 
+# Paleta da marca Infradata Brasil (mesmas cores do logotipo em
+# dash/assets/logo-mark*.svg) — ponto único pra qualquer gráfico ou
+# componente que precise de uma cor "de marca" em vez de uma cor semântica
+# de dado (ex: a escala RdYlGn de alta/queda em Maiores Variações continua
+# semântica de propósito, não usa essa paleta).
+BRAND = {
+    "tinta": "#17253F",  # nanquim — estrutura do logo, texto de marca
+    "ferrugem": "#AD5A1E",  # accent — cor primária do tema Mantine
+    "cianotipo": "#0E2A45",  # navy do rodapé/fundo blueprint
+    "papel": "#F4EFE4",  # papel de prancheta
+    "linha_clara": "#EAF3FA",  # traços do logo sobre fundo escuro
+    "barra_ambar": "#E6A94F",  # barras do logo sobre fundo escuro
+}
+
 
 def page_header(titulo: str, caption: str | list) -> list:
     return [
@@ -110,4 +124,4 @@ def data_table(df, style_data_conditional=None, page_size: int = 20, filterable:
 
 
 def info_box(mensagem: str) -> dmc.Alert:
-    return dmc.Alert(mensagem, variant="light", radius="md", mb="md")
+    return dmc.Alert(mensagem, variant="light", radius="md", mb="md", color="brand")

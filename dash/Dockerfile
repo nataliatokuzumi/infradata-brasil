@@ -19,4 +19,10 @@ EXPOSE 8501
 # threads=4 still gives concurrency across requests within that one process
 # (get_connection()/query() are already written to be thread-safe, see
 # gold.py's cursor()-per-call comment).
-ENTRYPOINT ["gunicorn", "--bind=0.0.0.0:8501", "--workers=1", "--threads=4", "--worker-class=gthread", "app:server"]
+#
+# Shell form + ${PORT:-8501}: Railway (and most PaaS) inject a dynamic PORT
+# env var the app must bind to; docker-compose locally doesn't set PORT, so
+# it falls back to 8501. `exec` replaces the shell with gunicorn (PID 1)
+# instead of leaving it as a child process, so SIGTERM on `docker stop` /
+# a platform redeploy reaches gunicorn directly for a clean shutdown.
+ENTRYPOINT ["sh", "-c", "exec gunicorn --bind=0.0.0.0:${PORT:-8501} --workers=1 --threads=4 --worker-class=gthread app:server"]

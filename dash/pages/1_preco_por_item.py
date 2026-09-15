@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.express as px
 from dash import Input, Output, State, callback, ctx, dcc, no_update
 
-from components import filter_row, info_box, metric_card, metric_row, page_header
+from components import BRAND, filter_row, info_box, metric_card, metric_row, page_header
 from gold import (
     MEDIDA_PRINCIPAL,
     TIPO_LABELS,
@@ -25,7 +25,7 @@ from gold import (
 # trabalho nesta página por enquanto.
 dash.register_page(
     __name__,
-    path="/preco-por-item",
+    path="/",
     name="Análise de Insumos",
     title="Análise de Insumos",
     order=1,
@@ -34,7 +34,10 @@ dash.register_page(
 PREFIX = "pi"
 
 REGIME_OPCOES = ["Ambos", "Não Desonerado", "Desonerado"]
-COR_REGIME = {"Não Desonerado": "#228be6", "Desonerado": "#2b8a3e"}
+# Cores da marca (tinta/ferrugem) em vez do azul/verde genérico — os dois
+# tons de maior contraste da paleta, suficientes pra distinguir os dois
+# regimes sem virar uma cor semântica (essa distinção é só categórica).
+COR_REGIME = {"Não Desonerado": BRAND["tinta"], "Desonerado": BRAND["ferrugem"]}
 
 
 def _formatar_variacao_pct(v) -> str:
@@ -81,6 +84,9 @@ def _buscar_preco_atual(tipo, codigo_descricao, codigo_escolhido, uf_escolhida, 
 
 
 def _buscar_serie_evolucao(tipo, codigo_descricao, codigo_escolhido, uf_escolhida, regime):
+    if tipo is None:
+        return pd.DataFrame(), "Selecione um tipo pra ver a evolução de preço."
+
     if uf_escolhida != "Todas":
         sql = """
             select ve.tipo, ve.codigo, ve.descricao, ve.medida, ve.state_name, ve.desonerado,
@@ -171,7 +177,8 @@ def layout(**kwargs):
                     id=f"{PREFIX}-tipo",
                     label="Tipo",
                     data=[{"label": TIPO_LABELS[t], "value": t} for t in TIPOS],
-                    value=TIPOS[0],
+                    value=None,
+                    placeholder="Selecione",
                     allowDeselect=False,
                 )),
                 # data já vem com o item "Todas"/"Todos" desde o layout
@@ -322,7 +329,7 @@ def _alternar_regime(tipo, valor_atual):
     prevent_initial_call=True,
 )
 def _limpar_filtros(n_clicks):
-    return TIPOS[0], "Todas", "Todos", "Todas"
+    return None, "Todas", "Todos", "Todas"
 
 
 # --------------------------------------------------------------- Preço Atual
@@ -444,6 +451,9 @@ def _renderizar_kpis(tipo, codigo_descricao, codigo_escolhido, uf_escolhida, reg
     Input(f"{PREFIX}-regime", "value"),
 )
 def _renderizar_grafico_preco_atual(tipo, codigo_descricao, codigo_escolhido, regime):
+    if tipo is None:
+        return info_box("Selecione um tipo pra começar.")
+
     # Sempre "Todas" as UFs — é um gráfico comparando estados entre si, não
     # faz sentido restringir a uma UF só (mesmo padrão dos cards Preço
     # Médio/Menor/Maior: ver _renderizar_kpis). Por isso não depende do
@@ -475,27 +485,24 @@ def _renderizar_grafico_preco_atual(tipo, codigo_descricao, codigo_escolhido, re
         y="valor",
         color="regime",
         barmode="group",
-        text="valor_rótulo",
         category_orders={"state_name": estados_ordenados},
         color_discrete_map=COR_REGIME,
         custom_data=["state_name", "valor_rótulo"],
     )
+    # sem rótulo de valor acima da barra: com 27 estados x 2 regimes lado a
+    # lado, o Plotly encolhia esse texto pra caber e ficava ilegível — o
+    # valor continua acessível pelo hover (hovertemplate abaixo).
+    TAMANHO_FONTE_GRAFICO = 13
     fig.update_traces(
-        textposition="outside",
-        textangle=-90,
         hovertemplate=f"%{{customdata[0]}}<br>Valor: %{{customdata[1]}}{sufixo_unidade}<extra></extra>",
     )
     fig.update_layout(
         xaxis_title=None,
         yaxis_title="Valor (R$)",
-        xaxis=dict(showgrid=False),
-        # rótulo vertical (textangle=-90) precisa de mais espaço acima das
-        # barras do que o padrão dá — sem isso ele cortava no topo do
-        # gráfico.
+        xaxis=dict(showgrid=False, tickfont=dict(size=TAMANHO_FONTE_GRAFICO)),
         yaxis=dict(showgrid=True, gridcolor="rgba(0, 0, 0, 0.06)", zeroline=False, rangemode="tozero"),
         legend_title="Regime",
         height=520,
-        margin=dict(t=80),
         plot_bgcolor="rgba(0, 0, 0, 0)",
         paper_bgcolor="rgba(0, 0, 0, 0)",
     )
