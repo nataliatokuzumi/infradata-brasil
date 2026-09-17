@@ -4,9 +4,6 @@ from dash import html
 from components import data_table, page_header
 from gold import TIPO_LABELS, formatar_periodo, query
 
-# Desativada temporariamente pra focar o trabalho na página 1 — descomentar
-# pra reativar.
-# dash.register_page(__name__, path="/cobertura", name="9. Cobertura", title="Cobertura", order=9)
 
 
 def layout(**kwargs):

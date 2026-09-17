@@ -1,26 +1,26 @@
-"""Componentes reutilizados nas páginas, construídos em cima do Dash
-Mantine Components pra bater com o visual do exemplo de referência
-(financial-dashboard-example.plotly.app) — cartões (Paper), grid responsivo,
-tipografia e tema claro/escuro vêm todos do Mantine. dash_table.DataTable
-continua sendo usado pra tabela (sort/filtro/estilo condicional nativos que
-o dmc.Table não tem), só que agora themado com as variáveis CSS do próprio
-Mantine em vez de tokens nossos, pra acompanhar o toggle de tema sem
-duplicar lógica."""
+"""Components reused across pages, built on top of Dash Mantine Components
+to match the look of the reference example
+(financial-dashboard-example.plotly.app) — cards (Paper), responsive grid,
+typography and light/dark theme all come from Mantine. dash_table.DataTable
+is still used for tables (native sort/filter/conditional styling that
+dmc.Table doesn't have), just now themed with Mantine's own CSS variables
+instead of our own tokens, to follow the theme toggle without duplicating
+logic."""
 import dash_mantine_components as dmc
 from dash import dash_table, html
 
-# Paleta da marca Infradata Brasil (mesmas cores do logotipo em
-# dash/assets/logo-mark*.svg) — ponto único pra qualquer gráfico ou
-# componente que precise de uma cor "de marca" em vez de uma cor semântica
-# de dado (ex: a escala RdYlGn de alta/queda em Maiores Variações continua
-# semântica de propósito, não usa essa paleta).
+# Infradata Brasil brand palette (same colors as the logo in
+# dash/assets/logo-mark*.svg) — single source of truth for any chart or
+# component that needs a "brand" color instead of a semantic data color
+# (e.g. the RdYlGn up/down scale in Maiores Variações is deliberately still
+# semantic, doesn't use this palette).
 BRAND = {
-    "tinta": "#17253F",  # nanquim — estrutura do logo, texto de marca
-    "ferrugem": "#AD5A1E",  # accent — cor primária do tema Mantine
-    "cianotipo": "#0E2A45",  # navy do rodapé/fundo blueprint
-    "papel": "#F4EFE4",  # papel de prancheta
-    "linha_clara": "#EAF3FA",  # traços do logo sobre fundo escuro
-    "barra_ambar": "#E6A94F",  # barras do logo sobre fundo escuro
+    "tinta": "#17253F",  # ink — logo structure, brand text
+    "ferrugem": "#AD5A1E",  # rust — accent, Mantine theme's primary color
+    "cianotipo": "#0E2A45",  # cyanotype navy — footer/blueprint background
+    "papel": "#F4EFE4",  # drafting paper
+    "linha_clara": "#EAF3FA",  # light line — logo strokes on dark background
+    "barra_ambar": "#E6A94F",  # amber bar — logo bars on dark background
 }
 
 
@@ -36,13 +36,13 @@ def limpar_filtros_button(component_id: str):
 
 
 def filter_row(*campos) -> dmc.Grid:
-    """Cada campo é (label, componente) — vira uma coluna numa grid
-    responsiva, equivalente a st.columns(n). label vazio pula o <label> do
-    helper (usado quando o próprio componente Mantine já renderiza seu
-    rótulo interno via prop `label=`, ex: dmc.Select). align="flex-end"
-    alinha todas as colunas pela base — é o que faz um botão sem label
-    (ex: "Limpar filtros") ficar na mesma altura da caixa de input dos
-    outros filtros, que têm um label de verdade acima."""
+    """Each campo is (label, component) — becomes one column in a responsive
+    grid, equivalent to st.columns(n). An empty label skips the helper's
+    <label> (used when the Mantine component itself already renders its own
+    internal label via the `label=` prop, e.g. dmc.Select). align="flex-end"
+    aligns every column to the baseline — that's what makes a button with
+    no label (e.g. "Limpar filtros") line up at the same height as the
+    other filters' input box, which have a real label above them."""
     return dmc.Grid(
         [
             dmc.GridCol(
@@ -58,10 +58,11 @@ def filter_row(*campos) -> dmc.Grid:
 
 
 def metric_card(label: str, value, delta: str | None = None, value_size: str = "xl") -> dmc.Paper:
-    # value aceita string (caso comum: número curto, ex: "R$ 2,40") ou já um
-    # componente pronto (ex: um dmc.Text com spans com pesos diferentes,
-    # tipo "código em negrito | descrição normal") — nesse segundo caso o
-    # chamador já controla peso/tamanho, então não embrulha de novo.
+    # value accepts either a string (common case: short number, e.g. "R$
+    # 2,40") or an already-built component (e.g. a dmc.Text with spans of
+    # different weights, like "bold code | normal description") — in that
+    # second case the caller already controls weight/size, so it isn't
+    # wrapped again.
     valor_node = dmc.Text(value, size=value_size, fw=700) if isinstance(value, str) else value
     children = [
         dmc.Text(label, size="sm", c="dimmed"),
@@ -78,14 +79,14 @@ def metric_row(*cards, cols: dict | None = None) -> dmc.SimpleGrid:
 
 
 def data_table(df, style_data_conditional=None, page_size: int = 20, filterable: bool = True) -> dmc.Paper:
-    # dash_table.DataTable não faz parte do Mantine — não herda tema/fonte
-    # sozinho. Os style_* apontam pras variáveis CSS que o próprio Mantine
-    # já expõe (--mantine-color-*, --mantine-font-*) em vez de valores
-    # nossos, pra bater com o resto da UI (mesma fonte/tamanho dos dmc.Text,
-    # cores acompanhando o tema automaticamente). style_as_list_view tira as
-    # bordas verticais entre células (visual de "grade de planilha"),
-    # deixando só um traço horizontal por linha — mais parecido com uma
-    # dmc.Table do que com um grid do Excel.
+    # dash_table.DataTable isn't part of Mantine — it doesn't inherit
+    # theme/font on its own. The style_* dicts point at the CSS variables
+    # Mantine itself already exposes (--mantine-color-*, --mantine-font-*)
+    # instead of our own values, to match the rest of the UI (same
+    # font/size as dmc.Text, colors following the theme automatically).
+    # style_as_list_view removes the vertical borders between cells
+    # ("spreadsheet grid" look), leaving just one horizontal line per row —
+    # closer to a dmc.Table than to an Excel grid.
     table = dash_table.DataTable(
         data=df.to_dict("records"),
         columns=[{"name": c, "id": c} for c in df.columns],

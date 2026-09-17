@@ -19,10 +19,6 @@ from gold import (
     rotulo_medida,
 )
 
-# Página 1 unifica o que antes eram duas páginas (Preço por Item + Evolução
-# de Preços) — mesmo conjunto de filtros no topo, seções empilhadas embaixo.
-# As páginas 3-9 foram desativadas (register_page comentado) pra focar o
-# trabalho nesta página por enquanto.
 dash.register_page(
     __name__,
     path="/",
@@ -34,9 +30,6 @@ dash.register_page(
 PREFIX = "pi"
 
 REGIME_OPCOES = ["Ambos", "Não Desonerado", "Desonerado"]
-# Cores da marca (tinta/ferrugem) em vez do azul/verde genérico — os dois
-# tons de maior contraste da paleta, suficientes pra distinguir os dois
-# regimes sem virar uma cor semântica (essa distinção é só categórica).
 COR_REGIME = {"Não Desonerado": BRAND["tinta"], "Desonerado": BRAND["ferrugem"]}
 
 
@@ -47,9 +40,6 @@ def _formatar_variacao_pct(v) -> str:
 
 
 def _com_transparencia(cor: str, alpha: float) -> str:
-    """Converte uma cor hex ("#rrggbb", como as do colorway do template
-    Plotly) pra rgba com a opacidade dada — usado pro preenchimento
-    translúcido do gráfico de evolução."""
     cor = cor.lstrip("#")
     if len(cor) == 6:
         r, g, b = int(cor[0:2], 16), int(cor[2:4], 16), int(cor[4:6], 16)
@@ -114,11 +104,6 @@ def _buscar_serie_evolucao(tipo, codigo_descricao, codigo_escolhido, uf_escolhid
 
         df = query(sql, params)
     else:
-        # Sem UF selecionada não dá pra plotar uma série por UF (viraria
-        # dezenas de linhas empilhadas) — mostra a média entre as UFs por
-        # período em vez de bloquear o gráfico. variacao_percentual não vem
-        # da view aqui (ela é calculada por UF) — é recalculada em cima da
-        # própria série já agregada, com pct_change por medida/regime.
         sql = """
             select ve.tipo, ve.codigo, ve.descricao, ve.medida, ve.desonerado,
                    ve.period_start, avg(ve.valor) as valor, di.unidade
@@ -154,9 +139,6 @@ def _buscar_serie_evolucao(tipo, codigo_descricao, codigo_escolhido, uf_escolhid
     if df.empty:
         return df, "Sem dados pra essa combinação de filtros."
 
-    # um gráfico de evolução só faz sentido pra um item — com os filtros
-    # nesse estado ainda sobra mais de um código, então pede pra escolher
-    # Descrição/Código antes de desenhar.
     if df["codigo"].nunique() > 1:
         return df.iloc[0:0], "Escolha uma Descrição (ou Código) específica pra ver a evolução de preço."
 
@@ -181,14 +163,6 @@ def layout(**kwargs):
                     placeholder="Selecione",
                     allowDeselect=False,
                 )),
-                # data já vem com o item "Todas"/"Todos" desde o layout
-                # inicial (não vazio) — sem isso, o Select nasce com value
-                # apontando pra uma opção que ainda não existe (data só é
-                # preenchido depois, por _atualizar_opcoes_insumo), e ele
-                # zera o value pra None nesse instante. Esse None então virava
-                # um parâmetro NULL no SQL (`codigo = ?` com None), que nunca
-                # bate com nada — daí a página abrir direto em "sem dados",
-                # só resolvendo depois de clicar em "Limpar filtros".
                 ("", dmc.Select(
                     id=f"{PREFIX}-descricao",
                     label="Descrição",
@@ -214,9 +188,6 @@ def layout(**kwargs):
                     searchable=True,
                     allowDeselect=False,
                 )),
-                # Materiais não tem variante desonerado — o filtro continua
-                # visível (não some da página), só fica desabilitado e sem
-                # opções/valor pra escolher.
                 ("", dmc.Select(
                     id=f"{PREFIX}-regime",
                     label="Regime",
@@ -224,14 +195,8 @@ def layout(**kwargs):
                     value="Ambos",
                     allowDeselect=False,
                 )),
-                # filter_row usa align="flex-end", que alinha esse
-                # botão pela base com os inputs dos outros filtros da
-                # fileira (que têm um label de verdade acima).
                 ("", dmc.Button("Limpar filtros", id=f"{PREFIX}-limpar", n_clicks=0, variant="light")),
             ),
-            # KPIs em destaque no topo (fora de qualquer card, como métrica
-            # principal da página) — só aparece quando os filtros já
-            # apontam pra um único item.
             dmc.Box(id=f"{PREFIX}-kpi-results"),
             dmc.Paper(
                 [
@@ -287,12 +252,6 @@ def _atualizar_opcoes_insumo(tipo):
     prevent_initial_call=True,
 )
 def _sincronizar_descricao_codigo(descricao_valor, codigo_valor):
-    # Descrição e Código eram dois filtros AND independentes que, na
-    # prática, sempre apontam pro mesmo insumo (o value de Descrição já É o
-    # codigo, só o label mostra a descrição) — agora escolher um define o
-    # outro, em vez de precisar preencher os dois ou eles brigarem se
-    # apontarem pra códigos diferentes. Só escreve no campo que NÃO disparou
-    # o callback, senão os dois ficariam se retriggerando um ao outro.
     gatilho = ctx.triggered_id
     if gatilho == f"{PREFIX}-descricao":
         novo_codigo = descricao_valor if descricao_valor != "Todas" else "Todos"
@@ -332,7 +291,6 @@ def _limpar_filtros(n_clicks):
     return None, "Todas", "Todos", "Todas"
 
 
-# --------------------------------------------------------------- Preço Atual
 
 @callback(
     Output(f"{PREFIX}-kpi-results", "children"),
@@ -343,31 +301,16 @@ def _limpar_filtros(n_clicks):
     Input(f"{PREFIX}-regime", "value"),
 )
 def _renderizar_kpis(tipo, codigo_descricao, codigo_escolhido, uf_escolhida, regime):
-    # Sempre busca com uf="Todas", mesmo que o filtro de UF esteja setado —
-    # Preço Médio/Menor/Maior precisam continuar refletindo TODAS as UFs
-    # independente da UF escolhida no filtro (senão, com uma UF específica
-    # selecionada, esses 3 cards colapsavam pra aquela UF só: média de 1
-    # linha = ela mesma, mínimo = máximo = ela mesma). A UF escolhida é
-    # aplicada depois, em Python, só nos cards que são explicitamente "na UF
-    # selecionada".
     df = _buscar_preco_atual(tipo, codigo_descricao, codigo_escolhido, "Todas", regime)
 
-    # Os KPIs só fazem sentido quando os filtros já apontam pra um único
-    # item (código) — com mais de um item misturado, "preço médio"/"menor
-    # preço" etc. deixariam de ter uma leitura única.
     if df.empty or df["codigo"].nunique() > 1:
         return None
 
     item = df.iloc[0]
     principal = MEDIDA_PRINCIPAL[tipo]
     df_principal = df[df["medida"] == principal]
-    # equipamentos não tem unidade publicada pelo SICRO (fica None) — nesse
-    # caso o sufixo simplesmente não aparece, em vez de mostrar "/ None".
     sufixo_unidade = f" / {item['unidade']}" if item["unidade"] else ""
 
-    # "código | descrição", só o código em negrito — dois spans dentro do
-    # mesmo Text em vez de um valor só, pra ter pesos diferentes na mesma
-    # linha (metric_card não reembrulha quando value já é um componente).
     bloco_insumo = dmc.Stack(
         [
             metric_card(
@@ -378,9 +321,6 @@ def _renderizar_kpis(tipo, codigo_descricao, codigo_escolhido, uf_escolhida, reg
                     dmc.Text(item["descricao"], span=True, fw=400, size="md"),
                 ]),
             ),
-            # px="md" pra alinhar com o conteúdo interno do card Insumo
-            # acima (que tem padding p="md") — sem isso o texto começava
-            # mais à esquerda que o card, parecendo desalinhado.
             dmc.Text(
                 f"Publicação mais recente: {formatar_periodo((df_principal if not df_principal.empty else df)['period_start'].max())}",
                 size="sm",
@@ -400,17 +340,11 @@ def _renderizar_kpis(tipo, codigo_descricao, codigo_escolhido, uf_escolhida, reg
             bloco_insumo,
         ]
 
-    # Preço atual e variação na UF selecionada só têm uma leitura única
-    # quando UMA UF está escolhida — com "Todas", não há uma UF de
-    # referência pra mostrar esses dois blocos.
     if uf_escolhida != "Todas":
         sub_uf = df_principal[df_principal["state_name"] == uf_escolhida]
         if len(sub_uf) == 1 or (len(sub_uf) > 1 and sub_uf["valor"].nunique() == 1):
             preco_atual_uf = formatar_moeda(sub_uf.iloc[0]["valor"]) + sufixo_unidade
         elif len(sub_uf) > 1:
-            # mais de uma linha pra mesma UF acontece com regime="Ambos" e o
-            # item publicado nos dois regimes ao mesmo tempo, com preços
-            # diferentes entre eles.
             preco_atual_uf = formatar_faixa_moeda(sub_uf["valor"].min(), sub_uf["valor"].max()) + sufixo_unidade
         else:
             preco_atual_uf = "—"
@@ -454,10 +388,6 @@ def _renderizar_grafico_preco_atual(tipo, codigo_descricao, codigo_escolhido, re
     if tipo is None:
         return info_box("Selecione um tipo pra começar.")
 
-    # Sempre "Todas" as UFs — é um gráfico comparando estados entre si, não
-    # faz sentido restringir a uma UF só (mesmo padrão dos cards Preço
-    # Médio/Menor/Maior: ver _renderizar_kpis). Por isso não depende do
-    # filtro de UF.
     df = _buscar_preco_atual(tipo, codigo_descricao, codigo_escolhido, "Todas", regime)
 
     if df.empty:
@@ -489,9 +419,6 @@ def _renderizar_grafico_preco_atual(tipo, codigo_descricao, codigo_escolhido, re
         color_discrete_map=COR_REGIME,
         custom_data=["state_name", "valor_rótulo"],
     )
-    # sem rótulo de valor acima da barra: com 27 estados x 2 regimes lado a
-    # lado, o Plotly encolhia esse texto pra caber e ficava ilegível — o
-    # valor continua acessível pelo hover (hovertemplate abaixo).
     TAMANHO_FONTE_GRAFICO = 13
     fig.update_traces(
         hovertemplate=f"%{{customdata[0]}}<br>Valor: %{{customdata[1]}}{sufixo_unidade}<extra></extra>",
@@ -510,7 +437,6 @@ def _renderizar_grafico_preco_atual(tipo, codigo_descricao, codigo_escolhido, re
     return dcc.Graph(figure=fig)
 
 
-# ---------------------------------------------------------- Evolução de Preços
 
 @callback(
     Output(f"{PREFIX}-medida-container", "children"),
@@ -525,12 +451,6 @@ def _atualizar_medidas(tipo, codigo_descricao, codigo_escolhido, uf_escolhida, r
     if erro:
         return info_box(erro)
 
-    # Medidas do mesmo item têm escalas muito diferentes entre si (ex:
-    # valor_aquisicao de equipamento fica na casa dos milhares,
-    # custo_produtivo do mesmo item fica nas dezenas) — plotadas juntas sem
-    # filtro, as menores ficam achatadas em zero e o gráfico vira ruído. Por
-    # isso o padrão mostra só a medida principal do tipo; dá pra adicionar
-    # mais pra comparar.
     opcoes_medida = sorted(df["medida"].unique())
     medida_padrao = MEDIDA_PRINCIPAL.get(tipo)
     default_medida = [medida_padrao] if medida_padrao in opcoes_medida else opcoes_medida[:1]
@@ -571,9 +491,6 @@ def _renderizar_evolucao(tipo, codigo_descricao, codigo_escolhido, uf_escolhida,
     df["valor_rótulo"] = df["valor"].apply(formatar_moeda_grafico)
     df["publicação"] = df["period_start"].apply(formatar_periodo)
 
-    # mesma cor por regime do gráfico de barras (COR_REGIME) — sem isso, a
-    # paleta padrão do template escolhia as cores por conta própria e o
-    # "desonerado" acabava caindo em vermelho aqui também.
     cor_por_serie = {
         serie: COR_REGIME["Desonerado" if desonerado else "Não Desonerado"]
         for serie, desonerado in df[["série", "desonerado"]].drop_duplicates().itertuples(index=False)
@@ -589,10 +506,6 @@ def _renderizar_evolucao(tipo, codigo_descricao, codigo_escolhido, uf_escolhida,
         color_discrete_map=cor_por_serie,
         custom_data=["publicação", "valor_rótulo"],
     )
-    # Curva suave (spline) + preenchimento translúcido embaixo da linha +
-    # marcadores discretos, sem rótulo de valor fixo em cada ponto (esse
-    # continua disponível no hover) — visual de "gráfico de crescimento",
-    # não de planilha com número em cima de cada ponto.
     for trace in fig.data:
         cor = trace.line.color
         trace.line.width = 3
@@ -602,12 +515,6 @@ def _renderizar_evolucao(tipo, codigo_descricao, codigo_escolhido, uf_escolhida,
     fig.update_traces(
         hovertemplate=f"Publicação: %{{customdata[0]}}<br>Valor: %{{customdata[1]}}{sufixo_unidade}<extra></extra>",
     )
-    # fill="tozeroy" preenche até y=0 na geometria — com preços numa faixa
-    # estreita (ex: 100 a 110), isso deixava a área pintada tomando quase a
-    # altura inteira do gráfico e achatando a variação real lá em cima.
-    # Travar o range do eixo Y perto do mínimo/máximo dos dados (em vez de
-    # deixar o autorange incluir o zero) resolve sem precisar tirar o
-    # preenchimento.
     y_min, y_max = df["valor"].min(), df["valor"].max()
     folga = (y_max - y_min) * 0.15 if y_max > y_min else max(y_max * 0.1, 1)
 
@@ -627,9 +534,6 @@ def _renderizar_evolucao(tipo, codigo_descricao, codigo_escolhido, uf_escolhida,
     )
 
     if uf_escolhida == "Todas":
-        # o nº de UFs com dado disponível pode variar de período pra
-        # período (nem toda UF publica todo trimestre) — por isso a nota
-        # não cita um número fixo de UFs.
         return [
             dmc.Text("Média entre as UFs com dado disponível em cada período.", c="dimmed", size="sm", mb="xs"),
             dcc.Graph(figure=fig),

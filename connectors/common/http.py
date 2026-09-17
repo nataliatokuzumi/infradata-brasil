@@ -3,6 +3,10 @@ from pathlib import Path
 
 import requests
 
+from connectors.common.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 def download_to_file(
     url: str,
@@ -16,6 +20,8 @@ def download_to_file(
     content, so callers get download + integrity hash in a single pass over
     the response body instead of re-reading the file afterwards.
     """
+    logger.info(f"[http] downloading: {url} -> {destination}")
+
     sha256 = hashlib.sha256()
 
     with requests.get(url, timeout=timeout, stream=True) as response:
@@ -27,4 +33,7 @@ def download_to_file(
                     handle.write(chunk)
                     sha256.update(chunk)
 
-    return destination, sha256.hexdigest()
+    digest = sha256.hexdigest()
+    logger.debug(f"[http] downloaded: {destination} (sha256={digest})")
+
+    return destination, digest

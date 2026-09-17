@@ -6,15 +6,6 @@ from dash import Input, Output, callback, dcc, html
 from components import data_table, filter_row, info_box, limpar_filtros_button, metric_card, metric_row, page_header
 from gold import formatar_moeda, formatar_moeda_grafico, formatar_periodo, list_insumos, list_ufs, query, rotulo_medida, rotulo_regiao, rotulo_sim_nao
 
-# Desativada temporariamente pra focar o trabalho na página 1 — descomentar
-# pra reativar.
-# dash.register_page(
-#     __name__,
-#     path="/detalhamento-de-equipamento",
-#     name="7. Detalhamento de Equipamento",
-#     title="Detalhamento de Equipamento",
-#     order=7,
-# )
 
 PREFIX = "de"
 

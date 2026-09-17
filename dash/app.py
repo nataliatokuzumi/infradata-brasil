@@ -3,19 +3,18 @@ import os
 import dash
 import dash_auth
 import dash_mantine_components as dmc
-from dash import ALL, Dash, Input, Output, callback, ctx, dcc, html
+import flask
+from dash import ALL, Dash, Input, Output, State, callback, ctx, dcc, html, no_update
 from dash_iconify import DashIconify
 
 import gold
+from auth import SessionAuth
+from logger import get_logger
 
-# Templates Plotly com paleta/fontes do Mantine (usados nos px.line/px.bar
-# das páginas) — sem isso os gráficos ficavam com o visual genérico do
-# Plotly, destoando do resto da UI agora que o app usa Mantine.
+logger = get_logger(__name__)
+
 dmc.add_figure_templates(default="mantine_light")
 
-# Intervalo de datas disponível na gold inteira (não só no item filtrado) —
-# calculado uma vez no startup do processo (não muda a cada request, os
-# dados só viram trimestralmente) pra compor o header.
 _periodo = gold.query("select min(period_start) as inicio, max(period_start) as fim from dim_data_referencia")
 _inicio = gold.formatar_periodo(_periodo["inicio"].iloc[0])
 _fim = gold.formatar_periodo(_periodo["fim"].iloc[0])
@@ -23,15 +22,6 @@ _fim = gold.formatar_periodo(_periodo["fim"].iloc[0])
 NOME_APP = "Dashboard de Análise de Preços do SICRO"
 SUBTITULO_APP = f"Dados disponíveis de {_inicio} a {_fim}  ·  Fonte: DNIT"
 
-# Paleta da marca Infradata Brasil (ver dash/assets/logo-mark.svg): tinta
-# nanquim + ferrugem, papel de prancheta — as mesmas cores do logotipo.
-# "brand" vira a cor primária do Mantine (botões, foco de campo). "tinta" é
-# o azul-marinho do próprio logotipo (as vigas da ponte), registrado como
-# cor Mantine à parte pra dar o "azul da marca" no link ativo do menu
-# lateral — em vez do azul genérico padrão do Mantine. Os gráficos NÃO
-# seguem essa paleta de propósito — lá a cor é semântica (regime
-# tributário, alta/queda de preço), e usar cor de marca ali confundiria
-# identidade visual com significado de dado.
 COR_INK = "#17253F"
 COR_ACCENT = "#AD5A1E"
 TEMA_MANTINE = {
@@ -49,23 +39,14 @@ TEMA_MANTINE = {
 }
 
 app = Dash(__name__, use_pages=True, suppress_callback_exceptions=True, title="Infradata Brasil")
-server = app.server  # exposto pro entrypoint de produção (gunicorn), ver Dockerfile
+server = app.server
 
-# Basic Auth via variáveis de ambiente — só liga se as duas estiverem
-# setadas, pra não travar o dev local (docker-compose sem elas continua
-# abrindo direto). Em produção (Railway, sem Easy Auth nativo como o Azure
-# tem), é isso que impede acesso sem login. Credenciais nunca no código —
-# mesmo tratamento que a connection string do Storage.
 AUTH_USERNAME = os.environ.get("DASH_AUTH_USERNAME")
 AUTH_PASSWORD = os.environ.get("DASH_AUTH_PASSWORD")
-if AUTH_USERNAME and AUTH_PASSWORD:
-    dash_auth.BasicAuth(app, {AUTH_USERNAME: AUTH_PASSWORD})
+auth = SessionAuth(app, AUTH_USERNAME, AUTH_PASSWORD) if AUTH_USERNAME and AUTH_PASSWORD else None
 
 
 def _navbar_links():
-    # Sem página Início: Análise de Insumos (pages/1_preco_por_item.py)
-    # registra path="/" e é a própria página de abertura do app, então
-    # todas as páginas registradas aparecem no menu, sem filtro.
     return dmc.Stack(
         [
             dmc.NavLink(
@@ -88,26 +69,71 @@ def _navbar_links():
     Input("url", "pathname"),
 )
 def _marcar_link_ativo(pathname):
-    # id de cada NavLink carrega o próprio path (pattern-matching) — o
-    # link ativo é só o que bate com a URL atual, dinamicamente conforme
-    # páginas são adicionadas/removidas do menu.
     return [item["id"]["path"] == pathname for item in ctx.outputs_list]
 
 
-app.layout = dmc.MantineProvider(
-    # forceColorScheme="light": a página fica sempre no tema claro, mesmo
-    # com o SO/navegador em modo escuro — por isso não tem mais
-    # ColorSchemeToggle no header (o toggle não teria efeito nenhum com o
-    # tema forçado). theme: registra a cor da marca como primária do
-    # Mantine (ver TEMA_MANTINE acima).
+def _login_layout():
+    next_path = flask.session.get("next", "/")
+
+    return dmc.MantineProvider(
+        forceColorScheme="light",
+        theme=TEMA_MANTINE,
+        children=dmc.Center(
+            style={"height": "100vh", "backgroundColor": "#F4EFE4"},
+            children=dmc.Paper(
+                withBorder=True,
+                shadow="sm",
+                radius="md",
+                p="xl",
+                w=360,
+                children=dmc.Stack(
+                    [
+                        dmc.Group(
+                            [
+                                html.Img(src="/assets/logo-mark.svg", height=40, width=47),
+                                dmc.Stack(
+                                    [
+                                        dmc.Text(
+                                            "INFRADATA BRASIL",
+                                            fw=800,
+                                            size="xs",
+                                            c=COR_ACCENT,
+                                            style={"letterSpacing": "0.16em"},
+                                        ),
+                                        dmc.Text(NOME_APP, fw=700, size="sm", c=COR_INK, lh=1.2),
+                                    ],
+                                    gap=2,
+                                ),
+                            ],
+                            gap="sm",
+                            mb="md",
+                        ),
+                        dmc.TextInput(id="login-username", label="Usuário", placeholder="usuário", required=True),
+                        dmc.PasswordInput(id="login-password", label="Senha", placeholder="senha", required=True, n_submit=0),
+                        dmc.Text(id="login-error", c="red", size="sm", mih=20),
+                        dmc.Button("Entrar", id="login-button", color="brand", fullWidth=True, n_clicks=0),
+                        dcc.Store(id="login-next", data=next_path),
+                        dcc.Location(id="login-redirect"),
+                    ],
+                    gap="sm",
+                ),
+            ),
+        ),
+    )
+
+
+def _dashboard_layout():
+    return dmc.MantineProvider(
     forceColorScheme="light",
     theme=TEMA_MANTINE,
     children=dmc.AppShell(
-        [
+        id="appshell",
+        children=[
             dcc.Location(id="url", refresh=False),
             dmc.AppShellHeader(
                 dmc.Group(
                     [
+                        dmc.Burger(id="burger-toggle", opened=False, hiddenFrom="sm", size="sm"),
                         html.Img(src="/assets/logo-mark.svg", height=38, width=45),
                         dmc.Stack(
                             [
@@ -132,13 +158,10 @@ app.layout = dmc.MantineProvider(
             ),
             dmc.AppShellNavbar(
                 [
-                    # bloco de marca no topo do menu, separado dos links por
-                    # um Divider — mesmo lockup do logotipo (símbolo +
-                    # nome), só que compacto.
                     dmc.Group(
                         [
                             html.Img(src="/assets/logo-mark.svg", height=28, width=32),
-                            dmc.Text("INFRADATA", fw=800, size="sm", c=COR_INK, style={"letterSpacing": "0.03em"}),
+                            dmc.Text("SICRO", fw=800, size="sm", c=COR_INK, style={"letterSpacing": "0.03em"}),
                         ],
                         gap="xs",
                         px="sm",
@@ -181,11 +204,48 @@ app.layout = dmc.MantineProvider(
             ),
         ],
         header={"height": 82},
-        navbar={"width": 260, "breakpoint": "sm"},
+        navbar={"width": 260, "breakpoint": "sm", "collapsed": {"mobile": True}},
         footer={"height": 52},
         padding="md",
     ),
+    )
+
+
+def serve_layout():
+    if auth and not auth.is_authorized():
+        return _login_layout()
+    return _dashboard_layout()
+
+
+app.layout = serve_layout
+
+
+@dash_auth.public_callback(
+    Output("login-error", "children"),
+    Output("login-redirect", "href"),
+    Input("login-button", "n_clicks"),
+    Input("login-password", "n_submit"),
+    State("login-username", "value"),
+    State("login-password", "value"),
+    State("login-next", "data"),
+    prevent_initial_call=True,
 )
+def _fazer_login(n_clicks, n_submit, username, password, next_path):
+    if auth and auth.login(username or "", password or ""):
+        logger.info(f"[auth] login succeeded for user={username!r}")
+        return "", next_path or "/"
+    logger.warning(f"[auth] login failed for user={username!r}")
+    return "Usuário ou senha inválidos.", no_update
+
+
+@callback(
+    Output("appshell", "navbar"),
+    Input("burger-toggle", "opened"),
+    State("appshell", "navbar"),
+)
+def _toggle_mobile_navbar(opened, navbar):
+    navbar["collapsed"] = {"mobile": not opened}
+    return navbar
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8501, debug=False)

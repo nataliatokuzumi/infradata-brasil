@@ -1,0 +1,44 @@
+version: 2
+
+models:
+  - name: stg_sicro__materiais
+    description: >
+      One row per material item per SICRO Relatório Sintético file.
+      preco_unitario is legitimately null for ~4% of rows — source files use
+      "-" as a "no value" placeholder, mapped to null by _clean_numeric in
+      sources/sicro/reader.py rather than treated as a bad row.
+    columns:
+      - name: codigo
+        data_tests:
+          - not_null
+      - name: blob_name
+        data_tests:
+          - not_null
+
+  - name: stg_sicro__equipamentos
+    description: One row per equipment item per SICRO Relatório Sintético file.
+    columns:
+      - name: codigo
+        data_tests:
+          - not_null
+      - name: blob_name
+        data_tests:
+          - not_null
+
+  - name: stg_sicro__mao_de_obra
+    description: >
+      One row per labor item per SICRO Relatório Sintético file. Columns
+      salario/encargos_totais/periculosidade_insalubridade are only
+      populated for pre_2025 schema_version rows — see model comment.
+    columns:
+      - name: codigo
+        data_tests:
+          - not_null
+      - name: blob_name
+        data_tests:
+          - not_null
+      - name: schema_version
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['pre_2025', '2025_plus']

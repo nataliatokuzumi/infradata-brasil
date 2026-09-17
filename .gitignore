@@ -11,13 +11,15 @@ parsed/
 *.duckdb
 
 # dbt - logs can capture secrets (e.g. resolved connection strings), regenerated on run
-transform/logs/
-transform/target/
-transform/dbt_packages/
+layers/gold_dbt/logs/
+layers/gold_dbt/target/
+layers/gold_dbt/dbt_packages/
 *.log
 
-# not ready to push yet
-connectors/**/tests/
+# not ready to push yet (python unit tests only - leading slash anchors this
+# to the repo root, so it doesn't also match dbt's own tracked tests/ under
+# layers/gold_dbt/)
+/tests/
 notebooks/
 .claude/
 

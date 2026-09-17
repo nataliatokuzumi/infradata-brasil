@@ -17,15 +17,6 @@ from gold import (
     rotulo_sim_nao,
 )
 
-# Desativada temporariamente pra focar o trabalho na página 1 — descomentar
-# pra reativar.
-# dash.register_page(
-#     __name__,
-#     path="/detalhamento-de-mao-de-obra",
-#     name="8. Detalhamento de Mão de Obra",
-#     title="Detalhamento de Mão de Obra",
-#     order=8,
-# )
 
 PREFIX = "dm"
 

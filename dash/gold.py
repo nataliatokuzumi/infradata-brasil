@@ -2,7 +2,7 @@
 setup do Superset (superset/bootstrap_gold_catalog.py) e do antigo app
 Streamlit (streamlit/gold.py): segredo Azure persistente + uma view por
 model, lendo direto do Parquet exportado em Blob Storage por
-transform/macros/export_to_gold.sql. Nunca loga a connection string.
+layers/gold_dbt/macros/export_to_gold.sql. Nunca loga a connection string.
 """
 import os
 import time
@@ -10,6 +10,10 @@ from functools import wraps
 
 import duckdb
 import pandas as pd
+
+from logger import get_logger
+
+logger = get_logger(__name__)
 
 DUCKDB_HOME = "/app/duckdb_home"
 CATALOG_PATH = f"{DUCKDB_HOME}/gold_catalog.duckdb"
@@ -152,6 +156,8 @@ def get_connection() -> duckdb.DuckDBPyConnection:
     if _connection is not None:
         return _connection
 
+    logger.info("[gold] setting up DuckDB catalog connection")
+
     os.makedirs(DUCKDB_HOME, exist_ok=True)
     # azure_transport_option_type=curl: sem isso, "Problem with the SSL CA
     # cert" neste tipo de container (ver superset/register_gold_database.py
@@ -169,6 +175,8 @@ def get_connection() -> duckdb.DuckDBPyConnection:
             CREATE OR REPLACE VIEW {model} AS
             SELECT * FROM read_parquet('azure://{container}/gold/{model}/*.parquet')
         """)
+
+    logger.info(f"[gold] catalog ready, {len(GOLD_MODELS)} view(s) registered")
 
     _connection = con
     return con

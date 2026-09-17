@@ -1,7 +1,7 @@
 # SICRO Relatório Sintético — data cleaning notes
 
 Issues found while parsing raw SICRO Relatório Sintético xlsx files into
-silver Parquet (`connectors/sicro/parse/reader.py`). Kept here because these
+silver Parquet (`sources/sicro/reader.py`). Kept here because these
 are quirks in the source files themselves — they'll resurface as more
 files/states/years get parsed, not one-off bugs.
 
@@ -87,7 +87,7 @@ from the position pattern, not stated data.
 **Decision:** silver stays an untouched mirror of the source file, including
 this duplication — `reader.py`/`writer.py` are not changed for this.
 Deduplication (exact-duplicate rows here, and resolving `revisado` in
-general) belongs in the dbt marts layer (`transform/models/marts/facts/`),
+general) belongs in the dbt marts layer (`layers/gold_dbt/models/marts/facts/`),
 as an explicit business-logic step over silver — not silently baked into the
 parse pipeline. Implemented in `fato_preco_material`/`fato_custo_equipamento`/
 `fato_custo_mao_de_obra` (see each model's header comment).

@@ -5,9 +5,6 @@ from dash import Input, Output, callback, dcc, html
 from components import data_table, filter_row, info_box, limpar_filtros_button, page_header
 from gold import TIPO_LABELS, TIPOS, formatar_moeda_grafico, formatar_periodo, list_insumos, query, rotulo_medida, rotulo_regiao, rotulo_sim_nao
 
-# Desativada temporariamente pra focar o trabalho na página 1 — descomentar
-# pra reativar.
-# dash.register_page(__name__, path="/comparacao-entre-ufs", name="4. Comparação entre UFs", title="Comparação entre UFs", order=4)
 
 PREFIX = "cu"
 

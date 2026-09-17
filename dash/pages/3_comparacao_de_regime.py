@@ -6,9 +6,6 @@ from dash import Input, Output, callback, dcc, html
 from components import data_table, filter_row, info_box, limpar_filtros_button, page_header
 from gold import MEDIDA_PRINCIPAL, TIPO_LABELS, formatar_moeda_grafico, formatar_periodo, list_insumos, list_ufs, query, rotulo_medida
 
-# Desativada temporariamente pra focar o trabalho na página 1 — descomentar
-# pra reativar.
-# dash.register_page(__name__, path="/comparacao-de-regime", name="3. Comparação de Regime", title="Comparação de Regime", order=3)
 
 PREFIX = "cr"
 TIPOS_REGIME = ["equipamentos", "mao_de_obra"]

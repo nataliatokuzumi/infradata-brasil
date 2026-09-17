@@ -2,6 +2,9 @@ import argparse
 from pathlib import Path
 
 from connectors.blob_storage.client import BlobStorageClient
+from connectors.common.logger import get_logger
+
+logger = get_logger(__name__)
 
 # "_state/" is a reserved top-level prefix that doesn't collide with the
 # region-name top-level prefixes (sudeste/norte/...) already used for raw
@@ -16,10 +19,11 @@ def restore_tracking_db(local_path: Path, blob_client: BlobStorageClient | None 
     blob_client = blob_client or BlobStorageClient()
 
     if not blob_client.blob_exists(TRACKING_DB_BLOB_NAME):
-        print(f"[db_sync] no {TRACKING_DB_BLOB_NAME} in blob storage yet, starting fresh")
+        logger.info(f"[db_sync] no {TRACKING_DB_BLOB_NAME} in blob storage yet, starting fresh")
         return
 
     blob_client.download_blob_to_file(TRACKING_DB_BLOB_NAME, local_path)
+    logger.info(f"[db_sync] restored tracking db to {local_path}")
 
 
 def persist_tracking_db(local_path: Path, blob_client: BlobStorageClient | None = None) -> None:
@@ -29,14 +33,15 @@ def persist_tracking_db(local_path: Path, blob_client: BlobStorageClient | None 
     blob_client = blob_client or BlobStorageClient()
 
     blob_client.upload_file(local_path, TRACKING_DB_BLOB_NAME)
+    logger.info(f"[db_sync] persisted tracking db from {local_path}")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Round-trip the SICRO tracking db through Blob Storage (for ephemeral CI runners)."
+        description="Round-trip the tracking db through Blob Storage (for ephemeral CI runners)."
     )
     parser.add_argument("action", choices=["restore", "persist"])
-    parser.add_argument("--db", default="connectors/sicro/downloads.db")
+    parser.add_argument("--db", default="layers/downloads.db")
     args = parser.parse_args()
 
     local_path = Path(args.db)

@@ -17,9 +17,6 @@ dash.register_page(
 
 PREFIX = "mv"
 
-# Sem "Ambos" aqui de propósito: diferente de Análise de Insumos, misturar
-# os dois regimes no mesmo ranking fazia cada item aparecer até 2x (mais os
-# vários componentes de custo somados — ver _buscar_maiores_variacoes).
 REGIME_OPCOES = ["Não Desonerado", "Desonerado"]
 
 
@@ -32,22 +29,11 @@ def _buscar_maiores_variacoes(tipo, uf_escolhida, regiao, regime):
             return pd.DataFrame()
         slugs = slug_rows
     else:
-        # UF="Todos": ranqueia junto todas as UFs da região escolhida (ou
-        # do Brasil inteiro, se a região também for "Todas") em vez de UF
-        # por UF.
         slugs = ufs["state_slug"] if regiao == "Todas" else ufs[ufs["region"] == regiao]["state_slug"]
 
     if slugs.empty:
         return pd.DataFrame()
 
-    # vw_maiores_variacoes ranqueia por (insumo, UF, regime, MEDIDA) — pra
-    # equipamentos/mão de obra, que têm várias medidas (componentes de
-    # custo) e 2 regimes, isso inundava o Top 20 com o mesmo insumo
-    # repetido várias vezes (confirmado: um único item ocupou 12 das 20
-    # posições num teste). Por isso não usa a view pronta — refaz a mesma
-    # lógica dela (último período disponível de cada UF, ranqueado por
-    # |variação%|) direto em cima de vw_evolucao_preco, já restrita à
-    # medida principal do tipo e a um regime por vez.
     principal = MEDIDA_PRINCIPAL[tipo]
     placeholders = ",".join(["?"] * len(slugs))
     sql = f"""
@@ -63,9 +49,6 @@ def _buscar_maiores_variacoes(tipo, uf_escolhida, regiao, regime):
         sql += " and not desonerado"
     elif regime == "Desonerado":
         sql += " and desonerado"
-    # materiais não tem variante desonerado — regime vem None (filtro
-    # desabilitado) e nenhuma das duas condições acima entra, o que já é
-    # o comportamento certo (materiais só tem uma linha por UF/período).
 
     sql += """
         ),
@@ -126,9 +109,6 @@ def layout(**kwargs):
                     searchable=True,
                     allowDeselect=False,
                 )),
-                # Materiais não tem variante desonerado — o filtro continua
-                # visível, só fica desabilitado e sem opções (mesmo padrão
-                # da página Análise de Insumos).
                 ("", dmc.Select(
                     id=f"{PREFIX}-regime",
                     label="Regime",
@@ -136,8 +116,6 @@ def layout(**kwargs):
                     value=REGIME_OPCOES[0],
                     allowDeselect=False,
                 )),
-                # filter_row usa align="flex-end", que alinha esse
-                # botão pela base com os inputs dos outros filtros.
                 ("", dmc.Button("Limpar filtros", id=f"{PREFIX}-limpar", n_clicks=0, variant="light")),
             ),
             dmc.Paper(
@@ -176,11 +154,6 @@ def _atualizar_opcoes_uf(regiao, uf_atual):
         ufs = ufs[ufs["region"] == regiao]
 
     opcoes = [{"label": "Todos", "value": "Todos"}] + [{"label": n, "value": n} for n in ufs["state_name"]]
-    # "Todos" sempre continua válido (o gráfico passa a agregar pela
-    # região nesse caso) — só troca o value se a UF específica atual não
-    # pertence mais à região escolhida. Nunca deixa o value apontar pra
-    # uma opção que não existe mais (isso já causou bug de "sem dados"
-    # antes, ver página de Preço por Item).
     if uf_atual == "Todos" or uf_atual in ufs["state_name"].values:
         novo_valor = uf_atual
     else:
@@ -234,8 +207,6 @@ def _renderizar_grafico(tipo, uf_escolhida, regiao, regime):
     df["medida"] = df["medida"].map(rotulo_medida)
     df["item"] = df["descricao"] + " — " + df["medida"]
     if uf_escolhida == "Todos":
-        # sem UF fixa no filtro, o item sozinho não diz de onde é —
-        # acrescenta a UF no rótulo pra não misturar tudo.
         df["item"] = df["item"] + " (" + df["state_name"] + ")"
 
     fig = px.bar(
@@ -245,12 +216,6 @@ def _renderizar_grafico(tipo, uf_escolhida, regiao, regime):
         orientation="h",
         color="variação%",
         color_continuous_scale="RdYlGn",
-        # sem isso, a escala de cor ancora no mínimo/máximo do que está
-        # sendo exibido — se o Top 20 filtrado vier todo positivo (só
-        # aumentos), o aumento MENOR (mas ainda positivo) virava vermelho
-        # só por ser "o menor da lista". Fixar o centro em 0 garante que
-        # vermelho/verde sempre reflitam queda/alta de verdade, não a
-        # faixa local do filtro atual.
         color_continuous_midpoint=0,
         text="variação%_rótulo",
     )
@@ -260,13 +225,7 @@ def _renderizar_grafico(tipo, uf_escolhida, regiao, regime):
         xaxis_title="Variação (%)",
         yaxis_title="",
         xaxis=dict(showgrid=True, gridcolor="rgba(0, 0, 0, 0.06)", zeroline=False),
-        # side="right": nome do insumo do lado direito do gráfico, não
-        # embaixo do eixo de variação (%) à esquerda.
         yaxis=dict(showgrid=False, side="right"),
-        # a barra de cor (colorbar) por padrão nasce colada no lado
-        # direito do gráfico — bem em cima dos nomes dos insumos que
-        # também estão à direita agora. Horizontal, no topo, evita a
-        # sobreposição de vez.
         coloraxis_colorbar=dict(
             title="Variação (%)",
             orientation="h",

@@ -5,9 +5,6 @@ from dash import Input, Output, callback, dcc, html
 from components import data_table, filter_row, info_box, limpar_filtros_button, page_header
 from gold import TIPO_LABELS, TIPOS, formatar_periodo, list_ufs, query, rotulo_sim_nao
 
-# Desativada temporariamente pra focar o trabalho na página 1 — descomentar
-# pra reativar.
-# dash.register_page(__name__, path="/indice-de-reajuste", name="5. Índice de Reajuste", title="Índice de Reajuste", order=5)
 
 PREFIX = "ir"
 
