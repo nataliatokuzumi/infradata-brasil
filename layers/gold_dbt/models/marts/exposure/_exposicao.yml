@@ -1,0 +1,29 @@
+version: 2
+
+models:
+  - name: vw_preco_atual
+    description: "Q1 — preço/custo mais recente por insumo x UF x regime x medida."
+
+  - name: vw_evolucao_preco
+    description: "Q2 — série temporal por insumo x UF x regime x medida, com variação absoluta/percentual vs. o período anterior."
+
+  - name: vw_comparacao_regime
+    description: "Q3 — desonerado vs. não desonerado lado a lado. Vazio para materiais (sem variante de regime)."
+
+  - name: vw_comparacao_uf
+    description: "Q4 — fato_medicao com nomes legíveis, pra comparar um insumo entre UFs sem reescrever o join fato/dimensão."
+
+  - name: vw_indice_reajuste
+    description: "Q5 — índice de reajuste acumulado (base-100) por tipo x UF x regime x período."
+
+  - name: vw_maiores_variacoes
+    description: "Q6 — top 20 maiores variações percentuais por (tipo, UF), no período mais recente de cada UF."
+
+  - name: vw_breakdown_equipamento
+    description: "Q7 — decomposição do custo de equipamento por componente."
+
+  - name: vw_breakdown_mao_de_obra
+    description: "Q8 — decomposição do custo de mão de obra por componente."
+
+  - name: vw_cobertura
+    description: "Q9 — última atualização por UF/tipo e lacunas relativas às UFs pares."
