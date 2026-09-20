@@ -1,0 +1,33 @@
+version: 2
+
+models:
+  - name: dim_uf
+    description: State dimension — one row per Brazilian federative unit.
+    columns:
+      - name: state_slug
+        data_tests: [not_null, unique]
+
+  - name: dim_data_referencia
+    description: >
+      Period dimension — one row per (year, month) in which some SICRO
+      report was published. SICRO publishes quarterly (confirmed:
+      January/April/July/October).
+    columns:
+      - name: period_start
+        data_tests: [not_null, unique]
+
+  - name: dim_insumo
+    description: >
+      Item catalog (materiais/equipamentos/mao_de_obra) — one row per
+      (tipo, codigo). unidade is always null for equipamentos (that report
+      doesn't publish that column for this type).
+    columns:
+      - name: insumo_id
+        data_tests: [not_null, unique]
+      - name: tipo
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['materiais', 'equipamentos', 'mao_de_obra']
+      - name: codigo
+        data_tests: [not_null]

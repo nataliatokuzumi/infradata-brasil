@@ -1,0 +1,11 @@
+infradata_brasil:
+  target: prod
+  outputs:
+    prod:
+      type: duckdb
+      path: warehouse.duckdb
+      extensions:
+        - azure
+        - httpfs
+      settings:
+        azure_storage_connection_string: "{{ env_var('AZURE_STORAGE_CONNECTION_STRING') }}"

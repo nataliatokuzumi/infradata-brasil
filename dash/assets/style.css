@@ -1,0 +1,192 @@
+/* A partir da adoção do Dash Mantine Components, o tema (claro/escuro,
+cores, tipografia) passou a ser responsabilidade do MantineProvider — as
+páginas ativas (Início, Preço por Item) não usam mais essas classes/tokens
+abaixo. Mantido só porque as páginas 3-9 (desativadas por enquanto, ver
+pages/3_..py etc.) ainda são dcc/html puro e dependem disso pra não ficar
+ilegíveis quando forem reativadas/migradas uma a uma. */
+:root {
+  --bg: #ffffff;
+  --text: #1a1a1a;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --sidebar-bg: #f7f7f8;
+  --table-header-bg: #f3f4f6;
+  --accent: #2563eb;
+  --info-bg: #eff6ff;
+  --lacuna-bg: #ffdddd;
+
+  /* Dash's próprios componentes nativos (dcc.Dropdown etc.) usam esses
+  tokens internamente (definidos hardcoded pro tema claro no bundle deles) —
+  sem redefini-los aqui, o dropdown sai sempre com fundo branco fixo, mas o
+  texto herda a cor da página (que no modo escuro fica clara), texto claro
+  em fundo claro = ilegível. Redefinir aqui os deixa consistentes com o
+  resto do app nos dois temas. */
+  --Dash-Fill-Inverse-Strong: #ffffff;
+  --Dash-Text-Strong: rgba(0, 9, 38, 0.9);
+  --Dash-Text-Weak: rgba(0, 12, 51, 0.65);
+  --Dash-Text-Primary: rgba(0, 18, 77, 0.87);
+  --Dash-Text-Disabled: rgba(0, 21, 89, 0.6);
+  --Dash-Stroke-Strong: rgba(0, 18, 77, 0.45);
+  --Dash-Stroke-Weak: rgba(0, 24, 102, 0.1);
+  --Dash-Fill-Interactive-Strong: #7f4bc4;
+  --Dash-Fill-Interactive-Weak: rgba(0, 30, 128, 0.04);
+  --Dash-Fill-Disabled: rgba(0, 24, 102, 0.1);
+  --Dash-Fill-Primary-Active: rgba(0, 18, 77, 0.08);
+  --Dash-Fill-Primary-Hover: rgba(0, 18, 77, 0.04);
+}
+
+/* color-scheme: light (não "light dark"): o app é sempre claro agora — ver
+app.py, MantineProvider(forceColorScheme="light"). Isso aqui avisa o
+navegador que a página NÃO tem modo escuro, pra ele não tentar aplicar um
+"dark mode forçado" por cima (reinvertendo cores de elementos que acha
+"não preparados"), que é exatamente a causa de um fundo escuro vazando por
+trás dos cards brancos do Mantine com texto ilegível. */
+:root {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border);
+  padding: 20px 12px;
+}
+
+.sidebar-title {
+  font-weight: 700;
+  font-size: 18px;
+  padding: 0 12px 16px;
+}
+
+.nav-item {
+  margin-bottom: 2px;
+}
+
+.nav-link {
+  display: block;
+  padding: 8px 12px;
+  border-radius: 6px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.nav-link:hover {
+  background: var(--border);
+}
+
+.page-content {
+  flex: 1;
+  padding: 24px 32px;
+  max-width: 1400px;
+}
+
+.caption {
+  color: var(--muted);
+  font-size: 14px;
+  margin-top: -8px;
+}
+
+.limpar-filtros {
+  margin-bottom: 16px;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.limpar-filtros:hover {
+  background: var(--table-header-bg);
+}
+
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.filter-col {
+  flex: 1 1 180px;
+  min-width: 180px;
+}
+
+.filter-col label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.metric-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 12px 0 20px;
+}
+
+.metric-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  min-width: 160px;
+}
+
+.metric-label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.metric-value {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.metric-delta {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.info-box {
+  background: var(--info-bg);
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 14px;
+  margin: 12px 0;
+}
+
+.section-subheader {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 20px 0 8px;
+}
+
+/* dash_table.DataTable não usa os tokens --Dash-* acima (é uma lib à
+parte) — o corpo/cabeçalho já são cobertos via style_cell/style_header em
+components.py, mas a caixa de busca da linha de filtro (filter_action=
+"native") é um <input> nativo dentro de .dash-filter, sem cor própria
+definida por padrão, então também herda a cor de texto da página. */
+.dash-filter input {
+  color: var(--text);
+  background: var(--bg);
+}

@@ -1,0 +1,59 @@
+version: 2
+
+models:
+  - name: fato_preco_material
+    description: >
+      Grão: insumo (materiais) x UF x período. Incremental por partição —
+      ver comentário no modelo. Deduplicado e com revisado resolvido
+      (docs/sicro_data_cleaning.md #6).
+    columns:
+      - name: preco_material_id
+        data_tests: [not_null, unique]
+      - name: insumo_id
+        data_tests: [not_null]
+      - name: preco_unitario
+        description: >
+          Legitimamente nulo em ~4% das linhas (placeholder "-" na fonte,
+          ver docs/sicro_data_cleaning.md #5) — nunca negativo ou zero
+          quando presente (confirmado nos dados).
+
+  - name: fato_custo_equipamento
+    description: >
+      Grão: insumo (equipamentos) x UF x período x regime tributário.
+      Mesmo tratamento de fato_preco_material.
+    columns:
+      - name: custo_equipamento_id
+        data_tests: [not_null, unique]
+      - name: insumo_id
+        data_tests: [not_null]
+
+  - name: fato_custo_mao_de_obra
+    description: >
+      Grão: insumo (mao_de_obra) x UF x período x regime tributário. Mesmo
+      tratamento de fato_preco_material. schema_version distingue o layout
+      pre_2025 (com salario/encargos_totais/periculosidade_insalubridade)
+      do 2025_plus (só custo).
+    columns:
+      - name: custo_mao_de_obra_id
+        data_tests: [not_null, unique]
+      - name: insumo_id
+        data_tests: [not_null]
+      - name: schema_version
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['pre_2025', '2025_plus']
+
+  - name: fato_medicao
+    description: >
+      Grão: insumo x UF x período x regime x medida. Fato longo/unpivotado
+      dos três fatos acima — base de todas as views de exposição
+      transversais (vw_evolucao_preco, vw_indice_reajuste,
+      vw_maiores_variacoes).
+    columns:
+      - name: medicao_id
+        data_tests: [not_null, unique]
+      - name: insumo_id
+        data_tests: [not_null]
+      - name: valor
+        data_tests: [not_null]
