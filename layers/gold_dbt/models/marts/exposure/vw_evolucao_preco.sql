@@ -35,3 +35,12 @@ select
 from ordenado
 inner join {{ ref('dim_insumo') }} as dim_insumo on ordenado.insumo_id = dim_insumo.insumo_id
 inner join {{ ref('dim_uf') }} as dim_uf on ordenado.state_slug = dim_uf.state_slug
+-- Clusters rows physically by (tipo, medida, state_slug) before export_to_gold
+-- writes this out to a single unpartitioned Parquet file (see
+-- macros/export_to_gold.sql) — dash's vw_evolucao_preco query
+-- (dash/pages/6_maiores_variacoes.py) filters on exactly these columns
+-- (tipo =, medida =, state_slug in (...)); without this ordering the rows
+-- for a given filter are scattered across every row group, forcing DuckDB
+-- to read most of the ~4.4M-row file from Blob per query — with this
+-- ordering, row-group min/max stats let it skip most of the file.
+order by tipo, medida, state_slug, period_start

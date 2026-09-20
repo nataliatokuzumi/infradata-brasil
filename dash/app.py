@@ -43,7 +43,10 @@ server = app.server
 
 AUTH_USERNAME = os.environ.get("DASH_AUTH_USERNAME")
 AUTH_PASSWORD = os.environ.get("DASH_AUTH_PASSWORD")
-auth = SessionAuth(app, AUTH_USERNAME, AUTH_PASSWORD) if AUTH_USERNAME and AUTH_PASSWORD else None
+# TEMPORARILY DISABLED — login gate turned off on purpose (ask before
+# reverting). To re-enable, restore:
+# auth = SessionAuth(app, AUTH_USERNAME, AUTH_PASSWORD) if AUTH_USERNAME and AUTH_PASSWORD else None
+auth = None
 
 
 def _navbar_links():
